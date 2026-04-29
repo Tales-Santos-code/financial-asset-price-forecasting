@@ -1,0 +1,41 @@
+artifact_path: mlflow-artifacts:/1/models/m-f17379b36764419abe20292c70fe486f/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.10
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.11.1
+model_id: m-f17379b36764419abe20292c70fe486f
+model_size_bytes: 74184
+model_uuid: m-f17379b36764419abe20292c70fe486f
+prompts: null
+run_id: c91033a4d6014e0892036251e1a6b2f8
+signature:
+  inputs: '[{"type": "double", "name": "Close", "required": true}, {"type": "long",
+    "name": "Volume", "required": true}, {"type": "double", "name": "Dividends", "required":
+    true}, {"type": "double", "name": "Stock Splits", "required": true}, {"type":
+    "double", "name": "Log_Return", "required": true}, {"type": "double", "name":
+    "Lag_1", "required": true}, {"type": "double", "name": "Lag_2", "required": true},
+    {"type": "double", "name": "Lag_3", "required": true}, {"type": "double", "name":
+    "Lag_5", "required": true}, {"type": "double", "name": "Rolling_Std_14", "required":
+    true}, {"type": "double", "name": "Distancia_SMA_20", "required": true}, {"type":
+    "double", "name": "Distancia_SMA_50", "required": true}, {"type": "double", "name":
+    "Volume_Shock", "required": true}, {"type": "double", "name": "Month_Sin", "required":
+    true}, {"type": "double", "name": "Month_Cos", "required": true}, {"type": "double",
+    "name": "Day_Sin", "required": true}, {"type": "double", "name": "Day_Cos", "required":
+    true}, {"type": "double", "name": "Bollinger_Width", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-04-27 17:03:47.093696'

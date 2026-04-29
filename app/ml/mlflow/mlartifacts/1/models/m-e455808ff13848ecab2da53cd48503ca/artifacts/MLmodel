@@ -1,0 +1,44 @@
+artifact_path: mlflow-artifacts:/1/models/m-e455808ff13848ecab2da53cd48503ca/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.pkl
+    predict_fn: predict
+    python_version: 3.12.10
+  sklearn:
+    code: null
+    pickled_model: model.pkl
+    serialization_format: cloudpickle
+    sklearn_version: 1.8.0
+    skops_trusted_types: null
+is_signature_from_type_hint: false
+mlflow_version: 3.11.1
+model_id: m-e455808ff13848ecab2da53cd48503ca
+model_size_bytes: 361103
+model_uuid: m-e455808ff13848ecab2da53cd48503ca
+prompts: null
+run_id: 7e6ca15f8adc4c8ebd6acd085e788af3
+signature:
+  inputs: '[{"type": "double", "name": "SP500_Return", "required": true}, {"type":
+    "double", "name": "VIX_Return", "required": true}, {"type": "double", "name":
+    "EURUSD_Return", "required": true}, {"type": "double", "name": "Log_Return", "required":
+    true}, {"type": "double", "name": "Lag_1", "required": true}, {"type": "double",
+    "name": "Lag_2", "required": true}, {"type": "double", "name": "Lag_3", "required":
+    true}, {"type": "double", "name": "Lag_5", "required": true}, {"type": "double",
+    "name": "Rolling_Std_14", "required": true}, {"type": "double", "name": "Distancia_SMA_20",
+    "required": true}, {"type": "double", "name": "Distancia_SMA_50", "required":
+    true}, {"type": "double", "name": "Volume_Shock", "required": true}, {"type":
+    "double", "name": "Month_Sin", "required": true}, {"type": "double", "name": "Month_Cos",
+    "required": true}, {"type": "double", "name": "Day_Sin", "required": true}, {"type":
+    "double", "name": "Day_Cos", "required": true}, {"type": "double", "name": "Volume_ROC_5",
+    "required": true}, {"type": "double", "name": "OBV_ROC_5", "required": true},
+    {"type": "double", "name": "Bollinger_Width", "required": true}, {"type": "double",
+    "name": "RSI_14", "required": true}, {"type": "double", "name": "MACD_Histogram",
+    "required": true}, {"type": "double", "name": "ATR_Pct", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float32", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-04-28 14:49:59.456873'
