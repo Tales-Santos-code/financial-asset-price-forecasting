@@ -7,7 +7,7 @@ class Settings:
     
     # AWS
     AWS_REGION: str = os.getenv("AWS_REGION", "us-east-1")
-    S3_BUCKET_NAME: str = os.getenv("BUCKET_NAME", "sub-challanger-prd-raw-zone-593793061865")
+    S3_BUCKET_NAME: str = os.getenv("BUCKET_NAME", "financial-asset-price-forecasting-495599733085-us-east-1-an")
     
     # MLflow
     MLFLOW_TRACKING_URI: str = os.getenv("MLFLOW_TRACKING_URI", "http://54.82.227.100:5000")

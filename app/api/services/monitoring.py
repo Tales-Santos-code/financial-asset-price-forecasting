@@ -2,8 +2,10 @@ from datetime import datetime
 import pandas as pd
 from app.api.core.logger import setup_logger
 from app.api.core.config import settings
-import
-from app.api.services.s3 import write_json_to_s3 # (Assumindo que você tem essa abstração do boto3)
+# from app.api.services.s3 import write_json_to_s3 # (Assumindo que você tem essa abstração do boto3)
+
+import os
+import json
 
 # Ajustado para usar o setup_logger do seu core
 logger = setup_logger("monitoring_service")
@@ -32,7 +34,23 @@ def save_prediction_log(symbol: str, features_utilizadas: pd.DataFrame, predicti
         }
         
         # Salva no Data Lake
-        write_json_to_s3(settings.S3_BUCKET_NAME, key, payload)
+        # write_json_to_s3(settings.S3_BUCKET_NAME, key, payload)
+
+        try:
+            local_dir = os.path.join(settings.BASE_DIR, "data", "predictions", symbol)
+            os.makedirs(local_dir, exist_ok=True)
+            
+            local_path = os.path.join(local_dir, f"{filename}.json")
+            
+            with open(local_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=4)
+        
+            logger.info(f"Log salvo localmente para análise de Drift: {local_path}")
+        except Exception as e:
+            logger.error(f"Falha catastrófica ao salvar log de monitoramento local: {e}")
+
+
+
         logger.info(f"Log de predição e features salvo no S3: {key}")
         
     except Exception as e:

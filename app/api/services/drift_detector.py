@@ -45,7 +45,7 @@ def check_data_drift(symbol: str = "RACE") -> bool:
     
     ref_path = os.path.join(settings.BASE_DIR, 'app', 'ml', 'pipeline', 'dados_transformados_V2.csv')
     if not os.path.exists(ref_path):
-        logger.error("Arquivo de referência (treinamento) não encontrado.")
+        logger.error(f"Arquivo de referência (treinamento) não encontrado. \n {ref_path}")
         return False
         
     reference_data = pd.read_csv(ref_path)

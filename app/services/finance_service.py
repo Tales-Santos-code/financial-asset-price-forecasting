@@ -14,7 +14,7 @@ class FinanceService:
             full (bool): Se True, retorna todos os dados (incluindo dividendos/splits). Se False, apenas colunas OHLCV.
             period (str): Período de tempo (ex: "1y", "max").
             interval (str): Intervalo (ex: "1h", "1d").
-            prepost (bool): Incluir pré/pós mercado.
+            prepost (bool): Incluir pré/pós mercado. 
             actions (bool): Incluir dividendos e splits.
             
         Returns:
