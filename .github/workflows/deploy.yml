@@ -71,13 +71,13 @@ jobs:
         echo "Subindo imagem para a AWS..."
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-    # - name: 🚀 Atualizar o AWS Lambda (Deploy Sem Downtime)
-    #   env:
-    #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-    #     ECR_REPOSITORY: financial-asset-price-forecasting
-    #     IMAGE_TAG: latest
-    #     LAMBDA_NAME: financial-asset-price-forecasting-lambda
-    #   run: |
-    #     aws lambda update-function-code \
-    #       --function-name $LAMBDA_NAME \
-    #       --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+    - name: 🚀 Atualizar o AWS Lambda (Deploy Sem Downtime)
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: financial-asset-price-forecasting
+        IMAGE_TAG: latest
+        LAMBDA_NAME: financial-asset-price-forecasting-lambda
+      run: |
+        aws lambda update-function-code \
+          --function-name $LAMBDA_NAME \
+          --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
