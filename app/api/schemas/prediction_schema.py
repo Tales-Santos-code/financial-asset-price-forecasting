@@ -14,24 +14,6 @@ class StockSymbol(str, Enum):
     WEGE3 = "WEGE3.SA"     # WEG
     GSPC = "^GSPC"         # S&P 500 (Para testes macro)
 
-class StockInterval(str, Enum):
-    FIVE_MINUTES = "5m"
-    FIFTEEN_MINUTES = "15m"
-    THIRTY_MINUTES = "30m"
-    SIXTY_MINUTES = "60m"
-    ONE_DAY = "1d"         # Padrão para os nossos dados diários
-    ONE_WEEK = "1wk"
-    ONE_MONTH = "1mo"
-
-class StockPeriod(str, Enum):
-    ONE_MONTH = "1mo"
-    THREE_MONTHS = "3mo"
-    SIX_MONTHS = "6mo"
-    HUNDRED_DAYS = "100d"  # Essencial para calcular a Média Móvel de 50 (SMA_50)
-    ONE_YEAR = "1y"
-    TWO_YEARS = "2y"
-    FIVE_YEARS = "5y"
-    MAX = "max"
 
 # ==========================================
 # 2. SCHEMAS DE REQUEST & RESPONSE
@@ -39,8 +21,6 @@ class StockPeriod(str, Enum):
 
 class PredictionRequest(BaseModel):
     symbol: StockSymbol = Field(default=StockSymbol.RACE, description="Ticker da ação para predição")
-    interval: StockInterval = Field(default=StockInterval.ONE_DAY, description="Intervalo entre as velas de cotação")
-    period: StockPeriod = Field(default=StockPeriod.HUNDRED_DAYS, description="Janela histórica necessária para gerar as features")
     
     # Opcionais caso queira forçar datas específicas no yfinance
     start_date: Optional[str] = None

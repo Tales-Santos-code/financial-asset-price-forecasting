@@ -1,11 +1,11 @@
 # app/ml/pipeline/train_pipeline.py
 import os
-import sys
+# import sys
 import joblib
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if BASE_DIR not in sys.path:
-    sys.path.append(BASE_DIR)
+# BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# if BASE_DIR not in sys.path:
+#     sys.path.append(BASE_DIR)
 
 from app.api.services.finance_service import FinanceService
 # IMPORTANTE: Importando a classe do novo arquivo

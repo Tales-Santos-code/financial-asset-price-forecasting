@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - MLOps API
+name: CI/CD Pipeline - financial-asset-price-forecasting
 
 on:
   push:

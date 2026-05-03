@@ -1,5 +1,4 @@
 import boto3
-import os
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
 
@@ -16,7 +15,7 @@ def get_aws_session() -> boto3.Session:
             aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY, # <-- Mudou aqui
             region_name=settings.AWS_REGION
         )
-        logger.info(f"Sessão AWS criada com sucesso.")
+        logger.info("Sessão AWS criada com sucesso.")
         return session 
     except Exception as e:
         logger.error(f"Falha ao iniciar sessão AWS: {e}")

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, HTTPException
-from app.api.schemas.prediction_schema import PredictionResponse, StockSymbol, StockInterval, StockPeriod
+from app.api.schemas.prediction_schema import PredictionResponse, StockSymbol
 from app.api.services.finance_service import FinanceService
 from app.api.services.prediction import pipe_to_predict
 from app.api.core.logger import setup_logger

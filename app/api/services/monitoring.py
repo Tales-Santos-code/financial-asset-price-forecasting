@@ -2,7 +2,6 @@ from datetime import datetime
 import pandas as pd
 from app.api.core.logger import setup_logger
 from app.api.core.config import settings
-# from app.api.services.s3 import write_json_to_s3 # (Assumindo que você tem essa abstração do boto3)
 
 import os
 import json
