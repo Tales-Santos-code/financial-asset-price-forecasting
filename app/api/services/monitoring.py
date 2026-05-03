@@ -7,6 +7,8 @@ from app.api.core.config import settings
 import os
 import json
 
+from app.api.services.s3 import write_json_to_s3
+
 # Ajustado para usar o setup_logger do seu core
 logger = setup_logger("monitoring_service")
 
@@ -34,7 +36,7 @@ def save_prediction_log(symbol: str, features_utilizadas: pd.DataFrame, predicti
         }
         
         # Salva no Data Lake
-        # write_json_to_s3(settings.S3_BUCKET_NAME, key, payload)
+        write_json_to_s3(settings.S3_BUCKET_NAME, key, payload)
 
         try:
             local_dir = os.path.join(settings.BASE_DIR, "data", "predictions", symbol)

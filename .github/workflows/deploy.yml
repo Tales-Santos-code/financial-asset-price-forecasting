@@ -1,0 +1,83 @@
+name: CI/CD Pipeline - MLOps API
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  # ==========================================
+  # JOB 1: INTEGRAÇÃO CONTÍNUA (Testes e Qualidade)
+  # ==========================================
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Clonar o Código
+      uses: actions/checkout@v3
+
+    - name: 🐍 Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10' # Mesma versão que vai rodar no AWS Lambda
+
+    - name: 📦 Instalar dependências de Teste
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff pytest
+        # Instala os pacotes do projeto também para o pytest conseguir rodar
+        pip install -r requirements.txt 
+
+    - name: 🧹 Linting e Formatação (Ruff)
+      run: |
+        echo "Verificando se o código segue a PEP8 e não tem erros de sintaxe..."
+        # O ruff vai checar a pasta 'app'. Se tiver erro grave, a esteira quebra aqui.
+        ruff check app/
+
+    - name: 🧪 Testes Unitários (Pytest)
+      run: |
+        echo "Rodando os testes do modelo e da API..."
+        # Descomente a linha abaixo quando você tiver criado a pasta "tests/" no seu projeto
+        # pytest tests/
+
+  # ==========================================
+  # JOB 2: ENTREGA CONTÍNUA (Build e Deploy na AWS)
+  # ==========================================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test # 🔒 TRAVA MLOPS: Esse job SÓ roda se o Job 'test' brilhar em verde!
+
+    steps:
+    - name: 📥 Clonar o Código
+      uses: actions/checkout@v3
+
+    - name: 🔐 Autenticar na AWS
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: 🐳 Login no Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: 🏗️ Build, Tag, e Push do Docker
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: financial-asset-price-forecasting
+        IMAGE_TAG: latest
+      run: |
+        echo "Iniciando a compilação do Container da API de Machine Learning..."
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        echo "Subindo imagem para a AWS..."
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    # - name: 🚀 Atualizar o AWS Lambda (Deploy Sem Downtime)
+    #   env:
+    #     ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+    #     ECR_REPOSITORY: financial-asset-price-forecasting
+    #     IMAGE_TAG: latest
+    #     LAMBDA_NAME: financial-asset-price-forecasting-lambda
+    #   run: |
+    #     aws lambda update-function-code \
+    #       --function-name $LAMBDA_NAME \
+    #       --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG

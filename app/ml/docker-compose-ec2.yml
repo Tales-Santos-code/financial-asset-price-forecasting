@@ -1,0 +1,33 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:14-alpine
+    environment:
+      - POSTGRES_USER=mlflow_user
+      - POSTGRES_PASSWORD=mlflow_senha_segura
+      - POSTGRES_DB=mlflow_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.10.2
+    ports:
+      - "5000:5000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=us-east-1
+      - S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an
+
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://mlflow_user:mlflow_senha_segura@db:5432/mlflow_db
+      --default-artifact-root s3://financial-asset-price-forecasting/mlflow-artifacts/
+      --host 0.0.0.0
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

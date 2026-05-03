@@ -7,7 +7,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
-from app.services.finance_service import FinanceService
+from app.api.services.finance_service import FinanceService
 # IMPORTANTE: Importando a classe do novo arquivo
 from app.ml.feature_engineer1 import FeatureEngineering
 

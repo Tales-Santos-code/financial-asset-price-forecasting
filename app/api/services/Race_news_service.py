@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from huggingface_hub import InferenceClient
 import os
 
+from app.api.core.config import settings
+from app.api.services.s3 import read_csv_from_s3, write_csv_to_s3
 
 # ==========================================
 # 1. SUAS CHAVES GRATUITAS AQUI
@@ -15,38 +17,41 @@ HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 # Inicializa o 'motor' oficial da Hugging Face
 hf_client = InferenceClient(token=HUGGINGFACE_API_KEY)
 
-def get_min_date_from_csv(caminho_csv) -> int:
-    """Lê o CSV gerado pelo pipeline de features para descobrir a data mínima já processada"""
-    if not os.path.exists(caminho_csv):
-        print(f"❌ Arquivo CSV não encontrado: {caminho_csv} \n retornando 360 dias")
+def get_min_date_from_s3(ticker: str) -> int:
+    """
+    Lê o CSV Master gerado pelo pipeline do S3 para descobrir a data mínima já processada.
+    """
+    bucket = settings.S3_BUCKET_NAME
+    s3_key = f"data/historical/{ticker}_master_history.csv"
+    
+    df = read_csv_from_s3(bucket, s3_key)
+    
+    if df is None or df.empty:
+        print(f"❌ Arquivo master não encontrado no S3: {s3_key} \n Retornando 360 dias (Carga Total)")
         return 360
     
     try:
-        df = pd.read_csv(caminho_csv)
         df['Date'] = pd.to_datetime(df['Date'])
         min_date = df['Date'].min()
         
-        # CORREÇÃO: Usando Pandas Timestamp para calcular corretamente (Hoje - Passado)
         hoje = pd.Timestamp.now().normalize()
         min_date = min_date.normalize()
         dias_passado = (hoje - min_date).days
         
-        print(f"📅 Data mínima encontrada no CSV: {min_date.date()} \n Gerando notícias dos últimos {dias_passado} dias")
+        print(f"📅 Data mínima encontrada no S3: {min_date.date()} \n Gerando notícias dos últimos {dias_passado} dias")
         return dias_passado
     except Exception as e:
-        print(f"Erro ao ler o CSV: {e} \n retornando 360 dias")
+        print(f"Erro ao processar datas do CSV: {e} \n Retornando 360 dias")
         return 360
 
 def analisar_sentimento_finbert(texto, max_tentativas=3):
     """Manda a manchete para a nuvem usando o SDK Oficial com Tolerância a Falhas (Retry)"""
     for tentativa in range(max_tentativas):
         try:
-            # A biblioteca cuida de achar a URL certa, passar pela segurança e acordar o modelo
             resultados = hf_client.text_classification(texto, model="ProsusAI/finbert")
             
             score_final = 0
             for item in resultados:
-                # A biblioteca pode retornar objetos ou dicionários, cobrimos os dois casos
                 label = item['label'].lower() if isinstance(item, dict) else item.label.lower()
                 score = item['score'] if isinstance(item, dict) else item.score
                 
@@ -59,7 +64,6 @@ def analisar_sentimento_finbert(texto, max_tentativas=3):
             
         except Exception as e:
             erro_str = str(e)
-            # Se for erro 500, 503 ou 504 (Instabilidade na HF), dorme 3s e tenta de novo
             if "500" in erro_str or "503" in erro_str or "504" in erro_str:
                 print(f"   ⚠️ Servidor HF engasgou. Tentativa {tentativa+1}/{max_tentativas}. Aguardando 3s...")
                 time.sleep(3)
@@ -67,11 +71,10 @@ def analisar_sentimento_finbert(texto, max_tentativas=3):
                 print(f"❌ Erro fatal na IA da Hugging Face: {e}")
                 return 0
                 
-    # Se bater as 3 tentativas e falhar, assume sentimento neutro para não quebrar o script
     return 0
 
 def gerar_base_sentimento(ticker="RACE", dias_passado=30):
-    """Baixa notícias do Finnhub, pontua no FinBERT e gera um CSV de médias diárias"""
+    """Baixa notícias do Finnhub, pontua no FinBERT e salva o consolidado no S3"""
     
     data_fim = datetime.now()
     data_inicio = data_fim - timedelta(days=dias_passado)
@@ -85,9 +88,8 @@ def gerar_base_sentimento(ticker="RACE", dias_passado=30):
     response_news = requests.get(url_news)
     noticias = response_news.json()
     
-    if isinstance(noticias, dict):
-        if "error" in noticias:
-            print(f"❌ API do Finnhub bloqueou a requisição. Motivo: {noticias['error']}")
+    if isinstance(noticias, dict) and "error" in noticias:
+        print(f"❌ API do Finnhub bloqueou a requisição. Motivo: {noticias['error']}")
         return
         
     if not isinstance(noticias, list) or len(noticias) == 0:
@@ -116,7 +118,6 @@ def gerar_base_sentimento(ticker="RACE", dias_passado=30):
             "Sentiment_Score": score
         })
         
-        # Um micro-descanso de 1 segundo para não levar ban por "spam" na API gratuita
         time.sleep(1)
 
     df_noticias = pd.DataFrame(dados_processados)
@@ -126,13 +127,32 @@ def gerar_base_sentimento(ticker="RACE", dias_passado=30):
         return
 
     # Agrupa tirando a MÉDIA do sentimento do dia
-    df_diario = df_noticias.groupby("Date")["Sentiment_Score"].mean().reset_index()
+    df_diario_novo = df_noticias.groupby("Date")["Sentiment_Score"].mean().reset_index()
     
-    caminho_arquivo = os.path.join('app', 'ml', 'pipeline', 'race_news.csv')
-    df_diario.to_csv(caminho_arquivo, index=False)
-    print(f"🚀 Sucesso! Arquivo '{caminho_arquivo}' gerado com sentimento matemático limpo.")
+    # ==========================================
+    # LÓGICA DE MLOps: Carga Incremental no S3
+    # ==========================================
+    bucket = settings.S3_BUCKET_NAME
+    s3_key = f"data/features/{ticker}_news_sentiment.csv"
+    
+    # Tenta baixar o histórico antigo para concatenar
+    df_antigo = read_csv_from_s3(bucket, s3_key)
+    
+    if df_antigo is not None and not df_antigo.empty:
+        print("🔄 Mesclando novas notícias com o histórico do S3...")
+        df_consolidado = pd.concat([df_antigo, df_diario_novo])
+        # Garante que não teremos duas médias para o mesmo dia
+        df_consolidado = df_consolidado.drop_duplicates(subset=['Date'], keep='last')
+        df_consolidado = df_consolidado.sort_values(by='Date')
+    else:
+        df_consolidado = df_diario_novo
+        print("🆕 Criando novo arquivo base de sentimento no S3.")
+
+    # Salva de volta na nuvem
+    write_csv_to_s3(bucket, s3_key, df_consolidado)
+    print(f"🚀 Sucesso! Arquivo '{s3_key}' salvo no Data Lake com sentimento matemático limpo.")
 
 if __name__ == "__main__":
-    csv_path = os.path.join('app', 'ml', 'pipeline', 'dados_transformados_V2.csv')
-    dias = get_min_date_from_csv(csv_path)
-    gerar_base_sentimento("RACE", dias_passado=dias)
+    ticker_alvo = "RACE"
+    dias = get_min_date_from_s3(ticker_alvo)
+    gerar_base_sentimento(ticker_alvo, dias_passado=dias)

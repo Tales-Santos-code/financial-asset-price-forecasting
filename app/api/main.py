@@ -1,24 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from mangum import Mangum
-import mlflow
-from contextlib import asynccontextmanager
 from app.api.core.config import settings
 from app.api.routers import monitoring_router, prediction_router
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Set global MLflow URI to ensure all mlflow calls (like load_model) use the remote server
-    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
-    print(f"Global MLflow URI set to: {settings.MLFLOW_TRACKING_URI}")
-    yield
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="API for Stock Data Prediction using MLflow models and S3",
     # root_path="/prod",
-    lifespan=lifespan
 )
 
 app.add_middleware(

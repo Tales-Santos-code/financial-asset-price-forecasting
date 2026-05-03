@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+mangum
+pydantic
+pandas
+xgboost
+joblib
+boto3
+yfinance
+evidently
+pydantic_settings
+huggingface_hub
+lightgbm

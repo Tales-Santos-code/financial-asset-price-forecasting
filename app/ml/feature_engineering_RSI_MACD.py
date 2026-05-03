@@ -8,7 +8,7 @@ import joblib
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(BASE_DIR)
-from app.services.finance_service import FinanceService
+from app.api.services.finance_service import FinanceService
 
 class FeatureEngineering(BaseEstimator, TransformerMixin):
     def __init__(self, is_training=True):
