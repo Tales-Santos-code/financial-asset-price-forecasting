@@ -5,9 +5,9 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
 
-# BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# sys.path.append(BASE_DIR)
-from app.api.services.finance_service import FinanceService
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(BASE_DIR)
+from app.api.services.finance_service import FinanceService# noqa: E402
 
 class FeatureEngineering(BaseEstimator, TransformerMixin):
     def __init__(self, is_training=True):
