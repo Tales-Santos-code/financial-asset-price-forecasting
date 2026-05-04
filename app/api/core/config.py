@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     #paths
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     PIPELINE_PATH: str = os.getenv("PIPELINE_PATH", f"{BASE_DIR}\\models\\pipeline_limpeza_V2.pkl")
-    MODEL_PATH: str = os.getenv("MODEL_PATH", f"{BASE_DIR}\\models\\melhor_modelo.pkl")
+    MODEL_PATH: str = os.getenv("MODEL_PATH", f"{BASE_DIR}\\models\\champions\\melhor_modelo.pkl")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
