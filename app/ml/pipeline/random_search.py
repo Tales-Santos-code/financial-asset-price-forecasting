@@ -7,7 +7,7 @@ from mlflow.tracking import MlflowClient
 from mlflow import artifacts
 
 # Importando as funções do seu utilitário S3 (incluindo a nova função de faxina)
-from utils_s3 import upload_champion_to_s3, delete_from_s3 
+from utils_s3 import upload_champion_to_s3
 
 # Tenta pegar do .env. Se não achar, usa a pasta atual de onde o script está rodando
 BASE_DIR = os.getenv("BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
@@ -135,7 +135,7 @@ def main():
             run_id = best_run.info.run_id
             
             print(f"🥇 Vencedor Absoluto ({symbol}): {best_model_type.upper()} com RMSE: {best_rmse:.5f}")
-            print(f"📥 Baixando artefatos do MLflow Local (S3)...")
+            print("📥 Baixando artefatos do MLflow Local (S3)...")
             
             # Baixa a pasta inteira do modelo e do scaler temporariamente para a máquina local
             local_model_dir = artifacts.download_artifacts(
@@ -151,7 +151,6 @@ def main():
             )
 
             # Aponta para os arquivos físicos dentro das pastas baixadas
-            arquivo_modelo_local = os.path.join(local_model_dir, "modelo.pkl") 
             arquivo_scaler_local = os.path.join(local_scaler_dir, "scaler.pkl")
             
             # ==========================================

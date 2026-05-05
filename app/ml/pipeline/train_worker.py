@@ -9,7 +9,6 @@ import codecs
 if sys.platform == 'win32':
     sys.stdout = codecs.getwriter('cp1252')(sys.stdout.buffer, 'replace')
     sys.stderr = codecs.getwriter('cp1252')(sys.stderr.buffer, 'replace')
-import pandas as pd
 import joblib
 import mlflow
 import mlflow.xgboost

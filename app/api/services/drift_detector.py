@@ -15,8 +15,6 @@ from app.api.core.logger import setup_logger
 # Importamos todos os conectores necessários do S3
 from app.api.services.s3 import write_html_to_s3, read_json_from_s3, read_csv_from_s3
 from app.api.core.aws import get_s3_client
-from app.api.schemas.monitoring_schema import TriggerDriftCheck
-
 logger = setup_logger("drift_detector")
 
 def disparar_retreino_github(symbol: str):
