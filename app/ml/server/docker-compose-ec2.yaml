@@ -23,8 +23,8 @@ services:
       - AWS_DEFAULT_REGION=us-east-1
     command: >
       sh -c "pip install psycopg2-binary boto3 && 
-             sudo apt-get update &&
-             sudo apt-get install -y libgomp1 &&
+             apt-get update &&
+             apt-get install -y libgomp1 &&
              mlflow server --backend-store-uri postgresql://mlflow_user:mlflow_senha_segura@db:5432/mlflow_db --default-artifact-root s3://financial-asset-price-forecasting-495599733085-us-east-1-an/mlflow-artifacts/ --host 0.0.0.0"
       
     depends_on:
