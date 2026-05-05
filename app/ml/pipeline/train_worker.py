@@ -83,7 +83,7 @@ def main():
             print(f"Dados carregados para {args.symbol}")
         except Exception as e:
             print(f"Erro ao baixar dados do S3: {e}")
-            return
+            sys.exit(1)
 
         # Descobre a posição exata da coluna que queremos prever
         target_col_index = df.columns.get_loc('Target_Log_Return')

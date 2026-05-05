@@ -15,7 +15,7 @@ BASE_DIR = os.getenv("BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
 def run_trial(cmd):
     """Executa o script do operário escondendo os logs poluidors do terminal."""
     try:
-        subprocess.check_call(cmd, stdout=subprocess.DEVNULL)
+        subprocess.check_call(cmd)
         return True
     except subprocess.CalledProcessError:
         return False
