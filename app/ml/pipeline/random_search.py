@@ -133,8 +133,18 @@ def main():
             best_rmse = best_run.data.metrics.get('rmse', 'N/A')
             best_model_type = best_run.data.params.get('model_type', 'N/A')
             run_id = best_run.info.run_id
+
+           
+            # Pega o valor bruto
+            raw_rmse = best_run.data.metrics.get('rmse', 'N/A')
             
-            print(f"🥇 Vencedor Absoluto ({symbol}): {best_model_type.upper()} com RMSE: {best_rmse:.5f}")
+            # Formata bonito apenas se for um número, senão exibe como texto normal
+            if isinstance(raw_rmse, (int, float)):
+                rmse_formatado = f"{raw_rmse:.5f}"
+            else:
+                rmse_formatado = str(raw_rmse)
+
+            print(f"🥇 Vencedor Absoluto ({symbol}): {best_model_type.upper()} com RMSE: {rmse_formatado}")
             print("📥 Baixando artefatos do MLflow Local (S3)...")
             
             # Baixa a pasta inteira do modelo e do scaler temporariamente para a máquina local
