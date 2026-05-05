@@ -130,7 +130,7 @@ def main():
         
         if runs:
             best_run = runs[0]
-            best_rmse = best_run.data.metrics.get('rmse', 'N/A')
+            # best_rmse = best_run.data.metrics.get('rmse', 'N/A')
             best_model_type = best_run.data.params.get('model_type', 'N/A')
             run_id = best_run.info.run_id
 
