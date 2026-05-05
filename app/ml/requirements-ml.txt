@@ -7,4 +7,4 @@ evidently
 psycopg2-binary
 pandas
 lightgbm
-
+torch
