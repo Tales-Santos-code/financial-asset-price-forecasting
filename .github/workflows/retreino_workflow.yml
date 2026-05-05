@@ -60,6 +60,10 @@ jobs:
             # 🐳 Garante que o MLflow (Cartório) está online antes do treino
             echo "Subindo o MLflow via Docker Compose..."
             docker compose -f app/ml/server/docker-compose-ec2.yaml up -d
+
+            # Dá um tempo para o banco e o servidor MLflow iniciarem completamente
+            echo "Aguardando o MLflow ficar online..."
+            sleep 30
             
             # 🐍 Configura e ativa o ambiente virtual do Python
             echo "Configurando dependências do Python..."
@@ -74,6 +78,29 @@ jobs:
             # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
             sudo shutdown -c
             echo "Treino concluído com sucesso. Desligamento emergencial cancelado."
+
+      - name: 5️⃣ Faxina de Disco (Post-Treino)
+        if: always() # Garante a execução mesmo se o passo 4 der erro (ex: falta de espaço)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ steps.get-ip.outputs.ip }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Iniciando limpeza de disco para evitar gargalos na próxima execução..."
+            
+            # Limpa o cache pesado de downloads do PIP (PyTorch, etc)
+            rm -rf /home/ubuntu/.cache/pip
+            
+            # Derruba o container do MLflow adequadamente antes de limpar (opcional, mas recomendado)
+            cd /home/ubuntu/financial-asset-price-forecasting
+            docker compose -f app/ml/server/docker-compose-ec2.yaml down
+            
+            # Remove todas as imagens, containers e volumes Docker não utilizados
+            docker system prune -af --volumes
+            
+            echo "Espaço em disco após a limpeza:"
+            df -h /
 
       - name: 5️⃣ Desligar a Máquina EC2 (Economia!)
         if: always() # IMPORTANTÍSSIMO: Roda essa etapa MESMO se o passo anterior der erro!

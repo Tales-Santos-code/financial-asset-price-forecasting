@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pandas as pd
-import requests # <-- NOVA IMPORTAÇÃO NECESSÁRIA PARA CHAMAR O GITHUB
+import requests 
 
 # ==========================================
 # IMPORTAÇÕES DO EVIDENTLY (v0.4+) E S3
@@ -20,7 +20,6 @@ logger = setup_logger("drift_detector")
 def disparar_retreino_github(symbol: str):
     """
     Bate na API do GitHub Actions para iniciar o workflow de retreino.
-    Lê as credenciais diretamente das variáveis de ambiente da Lambda.
     """
     logger.info(f"🚀 Acionando GitHub Actions para iniciar retreino de {symbol}...")
     
@@ -175,7 +174,7 @@ def check_data_drift(symbol: str) -> bool:
         if dataset_drift is True:
             logger.warning("🚨 ALERTA VERMELHO: Data Drift Detectado! O comportamento do mercado mudou.")
             
-            # === AQUI ESTÁ O GATILHO QUE INICIA O RETREINO ===
+            # === GATILHO QUE INICIA O RETREINO ===
             disparar_retreino_github(symbol)
             
             return True
