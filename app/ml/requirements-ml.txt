@@ -5,3 +5,4 @@ joblib
 boto3
 evidently
 psycopg2-binary
+pandas

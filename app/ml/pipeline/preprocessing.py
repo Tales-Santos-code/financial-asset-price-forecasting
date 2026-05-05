@@ -9,7 +9,7 @@ if BASE_DIR not in sys.path:
 
 from app.api.services.finance_service import FinanceService # noqa: E402
 # IMPORTANTE: Importando a classe do novo arquivo
-from app.ml.feature_engineer1 import FeatureEngineering # noqa: E402
+from app.ml.notebooks.feature_engineer1 import FeatureEngineering # noqa: E402
 
 if __name__ == "__main__":
     get_data = FinanceService()
