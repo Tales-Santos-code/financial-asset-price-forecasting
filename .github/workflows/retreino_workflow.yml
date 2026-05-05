@@ -57,6 +57,9 @@ jobs:
             echo "Atualizando o código..."
             git pull origin main
             
+            # garante que o docker vai subir com a configuração mais recente
+            docker compose -f app/ml/server/docker-compose-ec2.yaml down
+
             # 🐳 Garante que o MLflow (Cartório) está online antes do treino
             echo "Subindo o MLflow via Docker Compose..."
             docker compose -f app/ml/server/docker-compose-ec2.yaml up -d
