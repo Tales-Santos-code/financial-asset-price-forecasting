@@ -27,41 +27,56 @@ def _download_model_from_s3(s3_key: str, local_temp_path: str):
         logger.error(f"Falha ao baixar artefato do S3: {e}")
         raise
 
-def get_model_and_params():
-    """Carrega os artefatos apenas na primeira vez que a API for chamada (Cold Start)."""
-    if "pipeline" not in _model_cache:
-        logger.info("⏳ Carregando artefatos de Machine Learning...")
+def get_model_and_params(symbol: str):
+    cache_key = f"{symbol}_model" 
+    
+    if cache_key not in _model_cache:
+        logger.info(f"⏳ Inicializando ML para {symbol}...")
         try:
-            pipe_path = settings.PIPELINE_PATH
-            model_path = settings.MODEL_PATH
-
-            if not os.path.exists(pipe_path):
-                logger.warning("Pipeline local não encontrado. Recorrendo ao S3...")
-                pipe_path = os.path.join(tempfile.gettempdir(), "pipeline.pkl")
-                _download_model_from_s3("models/pipeline/pipeline.pkl", pipe_path)
-
-            if not os.path.exists(model_path):
-                logger.warning("Modelo local não encontrado. Recorrendo ao S3...")
-                model_path = os.path.join(tempfile.gettempdir(), "model_champion.pkl")
-                _download_model_from_s3("models/champion/modelo.pkl", model_path)
-
-            _model_cache["pipeline"] = joblib.load(pipe_path)
-            _model_cache["model"] = joblib.load(model_path)
+            # 1. Pipeline de features (Baixa sempre o mesmo)
+            pipe_path = os.path.join(tempfile.gettempdir(), f"pipeline_{symbol}.pkl")
+            # Ajuste o nome "pipeline.pkl" se no seu S3 ele estiver dentro de alguma pasta (ex: "models/pipeline.pkl")
+            _download_model_from_s3("pipeline.pkl", pipe_path) 
             
-            logger.info("✅ Pipeline e Modelo carregados na memória com sucesso!")
+            # 2. Baixa o Modelo (O nome agora é sempre fixo graças ao Maestro)
+            model_key = f"modelo_{symbol}.pkl"
+            model_path = os.path.join(tempfile.gettempdir(), model_key)
+            _download_model_from_s3(model_key, model_path)
+            
+            # 3. Tenta baixar o Scaler (O Maestro apaga se não precisar)
+            scaler = None
+            scaler_key = f"scaler_{symbol}.pkl"
+            scaler_path = os.path.join(tempfile.gettempdir(), scaler_key)
+            
+            try:
+                _download_model_from_s3(scaler_key, scaler_path)
+                scaler = joblib.load(scaler_path)
+                logger.info("📐 Scaler carregado e ativado.")
+            except Exception:
+                # Se cair aqui, é porque o arquivo não existe no S3 (modelo em árvore)
+                logger.info("⚡ Nenhum scaler no S3. Assumindo modelo baseado em árvore.")
+            
+            # Salva no cache da memória RAM da Lambda
+            _model_cache[f"{symbol}_pipeline"] = joblib.load(pipe_path)
+            _model_cache[f"{symbol}_model"] = joblib.load(model_path)
+            _model_cache[f"{symbol}_scaler"] = scaler
+            
+            logger.info("✅ Artefatos carregados na memória com sucesso!")
             
         except Exception as e:
             logger.error(f"❌ Erro Crítico ao carregar modelos: {e}")
             raise RuntimeError("Falha ao inicializar modelos de ML.")
             
-    return _model_cache["pipeline"], _model_cache["model"]
+    return _model_cache[f"{symbol}_pipeline"], _model_cache[f"{symbol}_model"], _model_cache[f"{symbol}_scaler"]
 
 def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFrame) -> dict:
     """
     Recebe os dados crus, processa no pipeline e gera a predição final.
     """
     logger.info(f"Iniciando pipe de inferência para {symbol}...")
-    pipeline, model = get_model_and_params()
+    
+    # IMPORTANTE: Desempacota o scaler e passa o symbol para a função!
+    pipeline, model, scaler = get_model_and_params(symbol)
 
     ultimo_preco = float(df_history['Close'].iloc[-1])
     data_ref = df_history.index[-1].strftime('%Y-%m-%d')
@@ -78,8 +93,22 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
     cols_para_remover = ['Target_Log_Return', 'Date']
     X_pred = features_hoje.drop(columns=[c for c in cols_para_remover if c in features_hoje.columns])
     
-    logger.info("🧠 Gerando previsão com XGBoost...")
-    log_return_previsto = model.predict(X_pred)[0]
+    # ==========================================
+    # LÓGICA DE ESCALONAMENTO CONDICIONAL
+    # ==========================================
+    X_pred_scaled = X_pred.copy()
+    if scaler is not None:
+        logger.info("📐 Aplicando o Scaler nas features de entrada...")
+        # Aplica a transformação mantendo a estrutura do DataFrame do Pandas
+        X_pred_scaled = pd.DataFrame(
+            scaler.transform(X_pred), 
+            columns=X_pred.columns, 
+            index=X_pred.index
+        )
+    
+    logger.info("🧠 Gerando previsão com o modelo campeão...")
+    # Usa a versão escalonada (que pode estar transformada ou intacta dependendo do If acima)
+    log_return_previsto = model.predict(X_pred_scaled)[0]
     preco_previsto = ultimo_preco * np.exp(log_return_previsto)
     variacao_pct = (np.exp(log_return_previsto) - 1) * 100
     
@@ -91,15 +120,14 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
         "timestamp": data_ref
     }
     
-    # Passamos o X_pred (features) e o resultado para o monitoramento
-    save_prediction_log(symbol, X_pred, resultado)
+    # Passamos o X_pred (features originais ou escaladas) e o resultado para o monitoramento
+    save_prediction_log(symbol, X_pred_scaled, resultado)
     
     # ==========================================
     # CARGA INCREMENTAL DOS DADOS TRANSFORMADOS NO S3
     # ==========================================
 
     from app.api.services.cleaning import historical_cleaning
-
 
     cleaned_s3_key = f"data/processed/{symbol}_historical_cleaned.csv"
     df_cleaned_antigo = read_csv_from_s3(settings.S3_BUCKET_NAME, cleaned_s3_key)

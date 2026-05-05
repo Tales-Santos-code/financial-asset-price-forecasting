@@ -1,6 +1,7 @@
 import os
 import tempfile
 import pandas as pd
+import requests # <-- NOVA IMPORTAÇÃO NECESSÁRIA PARA CHAMAR O GITHUB
 
 # ==========================================
 # IMPORTAÇÕES DO EVIDENTLY (v0.4+) E S3
@@ -14,8 +15,47 @@ from app.api.core.logger import setup_logger
 # Importamos todos os conectores necessários do S3
 from app.api.services.s3 import write_html_to_s3, read_json_from_s3, read_csv_from_s3
 from app.api.core.aws import get_s3_client
+from app.api.schemas.monitoring_schema import TriggerDriftCheck
 
 logger = setup_logger("drift_detector")
+
+def disparar_retreino_github(symbol: str):
+    """
+    Bate na API do GitHub Actions para iniciar o workflow de retreino.
+    Lê as credenciais diretamente das variáveis de ambiente da Lambda.
+    """
+    logger.info(f"🚀 Acionando GitHub Actions para iniciar retreino de {symbol}...")
+    
+    # Busca as variáveis injetadas na AWS Lambda (com fallback para settings caso rode local)
+    github_token = os.environ.get("GITHUB_TOKEN") or getattr(settings, "GITHUB_TOKEN", None)
+    github_owner = os.environ.get("GITHUB_OWNER") or getattr(settings, "GITHUB_OWNER", "SEU_USUARIO_GITHUB")
+    github_repo = os.environ.get("GITHUB_REPO") or getattr(settings, "GITHUB_REPO", "NOME_DO_SEU_REPOSITORIO")
+    
+    if not github_token:
+        logger.error("❌ GITHUB_TOKEN não encontrado nas variáveis de ambiente da Lambda! O retreino não será acionado.")
+        return
+        
+    url = f"https://api.github.com/repos/{github_owner}/{github_repo}/actions/workflows/retreino_workflow.yml/dispatches"
+    
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "Authorization": f"token {github_token}"
+    }
+    
+    payload = {
+        "ref": "main", # Branch onde está o arquivo yml
+        "inputs": {"symbol": symbol}
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code == 204:
+            logger.info("✅ Sinal de retreino enviado com sucesso para o GitHub Actions!")
+        else:
+            logger.error(f"❌ Falha ao acionar GitHub: Status {response.status_code} - {response.text}")
+    except Exception as e:
+        logger.error(f"❌ Erro de conexão com a API do GitHub: {e}")
+
 
 def load_production_logs(symbol: str) -> pd.DataFrame:
     """
@@ -45,7 +85,7 @@ def load_production_logs(symbol: str) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-def check_data_drift(symbol: str = "RACE") -> bool:
+def check_data_drift(symbol: str) -> bool:
     """
     Execução Cloud Native (compatível com AWS Lambda e Evidently v0.4+).
     """
@@ -136,6 +176,10 @@ def check_data_drift(symbol: str = "RACE") -> bool:
         
         if dataset_drift is True:
             logger.warning("🚨 ALERTA VERMELHO: Data Drift Detectado! O comportamento do mercado mudou.")
+            
+            # === AQUI ESTÁ O GATILHO QUE INICIA O RETREINO ===
+            disparar_retreino_github(symbol)
+            
             return True
         else:
             logger.info("✅ Dados estáveis. A distribuição se mantém semelhante ao treino. Modelo saudável.")
@@ -146,4 +190,4 @@ def check_data_drift(symbol: str = "RACE") -> bool:
         return False
 
 if __name__ == "__main__":
-    check_data_drift()
+    check_data_drift("RACE")

@@ -1,0 +1,82 @@
+name: Retreino Automático de MLOps
+
+# Permite que o workflow seja acionado via API (pelo seu código Python na AWS Lambda)
+on:
+  workflow_dispatch:
+    inputs:
+      symbol:
+        description: 'Ticker da ação para retreino'
+        required: true
+        default: 'RACE'
+
+jobs:
+  mlops-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1️⃣ Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: 2️⃣ Ligar a Máquina EC2 (MLflow Server & Training)
+        run: |
+          aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
+          echo "Aguardando a máquina inicializar na AWS..."
+          aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
+          sleep 30 # Dá um tempo extra para o serviço SSH do Linux ligar
+
+      - name: 3️⃣ Pegar IP Público da Máquina
+        id: get-ip
+        run: |
+          PUBLIC_IP=$(aws ec2 describe-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          echo "ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+          echo "Máquina online no IP: $PUBLIC_IP"
+
+      - name: 4️⃣ Acessar via SSH, Configurar Ambiente e Rodar Retreino
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ steps.get-ip.outputs.ip }}
+          username: ubuntu # Usuário padrão da EC2 Ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # 🚨 O BOTÃO DO HOMEM MORTO: Agenda o desligamento da máquina para daqui a 60 min.
+            # Se a máquina travar por falta de RAM, ela vai se auto-desligar!
+            sudo shutdown -P +60 "Desligamento de segurança ativado pelo GitHub Actions"
+            
+            cd /home/ubuntu
+            
+            # 📁 Gerencia o Repositório
+            if [ ! -d "financial-asset-price-forecasting" ]; then
+              echo "Clonando o repositório..."
+              git clone https://github.com/Tales-Santos-code/financial-asset-price-forecasting.git
+            fi
+            
+            cd financial-asset-price-forecasting
+            echo "Atualizando o código..."
+            git pull origin main
+            
+            # 🐳 Garante que o MLflow (Cartório) está online antes do treino
+            echo "Subindo o MLflow via Docker Compose..."
+            docker compose -f app/ml/server/docker-compose-ec2.yaml up -d
+            
+            # 🐍 Configura e ativa o ambiente virtual do Python
+            echo "Configurando dependências do Python..."
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r app/ml/requirements-ml.txt
+            
+            # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos
+            echo "Iniciando o retreino para: ${{ github.event.inputs.symbol }}"
+            python app/ml/pipeline/random_search.py --symbol ${{ github.event.inputs.symbol }}
+            
+            # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
+            sudo shutdown -c
+            echo "Treino concluído com sucesso. Desligamento emergencial cancelado."
+
+      - name: 5️⃣ Desligar a Máquina EC2 (Economia!)
+        if: always() # IMPORTANTÍSSIMO: Roda essa etapa MESMO se o passo anterior der erro!
+        run: |
+          echo "Desligando a EC2 para não gerar custos..."
+          aws ec2 stop-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}

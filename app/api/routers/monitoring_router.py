@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
 from fastapi.responses import HTMLResponse
 from datetime import datetime
 
+# Presumi que TriggerDriftCheck seja um Enum. Se for, você precisa adicionar "ALL" a ele, 
+# ou usar apenas 'str' como fiz abaixo para maior flexibilidade.
 from app.api.schemas.monitoring_schema import DriftStatusResponse, ModelHealthResponse
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
@@ -11,6 +13,10 @@ from app.api.services.s3 import read_html_from_s3
 logger = setup_logger(__name__)
 router = APIRouter()
 
+# Lista de todos os ativos que você monitora. 
+# DICA: No futuro, o ideal é puxar isso de um banco de dados ou do settings!
+ATIVOS_MONITORADOS = ["RACE", "AAPL", "NVDA", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "^GSPC"]
+
 @router.get("/health", response_model=ModelHealthResponse)
 def check_model_health():
     """
@@ -19,38 +25,54 @@ def check_model_health():
     return ModelHealthResponse(
         model_version="XGBoost_Ferrari_v2.1",
         is_online=True,
-        total_predictions_today=42 # Na vida real, viria do banco de dados/S3
+        total_predictions_today=42 
     )
 
 @router.post("/trigger-drift-check", response_model=DriftStatusResponse)
 def trigger_drift_analysis(
     background_tasks: BackgroundTasks,
-    symbol: str = Query("RACE", description="Ticker da ação para analisar drift")
+    symbol: str = Query("ALL", description="Ticker da ação (ex: RACE) ou 'ALL' para rodar todos.")
 ):
     """
     Força a execução do Evidently AI.
-    Processamento In-Memory rodando em background (Cloud Native).
+    Se 'ALL' for passado, processa todos os ativos da carteira em paralelo.
     """
     ticker = symbol.upper()
+    
     try:
-        logger.info(f"Solicitação de análise de Data Drift recebida via API para {ticker}.")
-        
-        # Manda a função pesada rodar em segundo plano passando o ticker escolhido
-        background_tasks.add_task(check_data_drift, ticker)
-        
-        return DriftStatusResponse(
-            status="Processando",
-            dataset_drift_detected=False,
-            last_check_timestamp=datetime.utcnow().isoformat(),
-            message=f"Análise do Evidently AI iniciada em segundo plano para {ticker}. O HTML será enviado ao S3."
-        )
+        if ticker == "ALL":
+            logger.info("🔄 Solicitação de análise de Drift em LOTE (ALL) recebida.")
+            
+            # Dispara uma task em background separada para cada ativo
+            for ativo in ATIVOS_MONITORADOS:
+                background_tasks.add_task(check_data_drift, ativo)
+            
+            return DriftStatusResponse(
+                status="Processando Lote",
+                dataset_drift_detected=False,
+                last_check_timestamp=datetime.utcnow().isoformat(),
+                message=f"Análise em background iniciada para {len(ATIVOS_MONITORADOS)} ativos simultaneamente."
+            )
+            
+        else:
+            logger.info(f"🔍 Solicitação de análise individual recebida para {ticker}.")
+            
+            # Roda apenas o ticker específico solicitado
+            background_tasks.add_task(check_data_drift, ticker)
+            
+            return DriftStatusResponse(
+                status="Processando Individual",
+                dataset_drift_detected=False,
+                last_check_timestamp=datetime.utcnow().isoformat(),
+                message=f"Análise iniciada em background para {ticker}."
+            )
 
     except Exception as e:
-        logger.error(f"Erro ao acionar drift check: {str(e)}")
+        logger.error(f"❌ Erro ao acionar drift check: {str(e)}")
         raise HTTPException(status_code=500, detail="Falha ao iniciar o detector de drift.")
     
     
-@router.get("/drift-report/{symbol}", response_class=HTMLResponse, summary="Visualizar Dashboard de Data Drift")
+@router.get("/drift-report/{symbol}", response_class=HTMLResponse, summary="Visualizar Dashboard")
 def view_drift_report(symbol: str):
     """
     Busca o dashboard HTML gerado pelo Evidently AI diretamente do Data Lake (S3).
@@ -58,14 +80,13 @@ def view_drift_report(symbol: str):
     ticker = symbol.upper()
     s3_key = f"monitoring/drift_reports/drift_report_{ticker}.html"
     
-    # Busca a string de HTML puro 100% da AWS
     html_content = read_html_from_s3(settings.S3_BUCKET_NAME, s3_key)
     
     if not html_content:
         logger.warning(f"Tentativa de acessar relatório inexistente no S3 para {ticker}.")
         raise HTTPException(
             status_code=404, 
-            detail=f"Relatório não encontrado no Data Lake para {ticker}. Rode a predição e force a análise primeiro."
+            detail=f"Relatório não encontrado no Data Lake para {ticker}."
         )
         
     logger.info(f"Servindo dashboard de Data Drift via S3 para {ticker}.")

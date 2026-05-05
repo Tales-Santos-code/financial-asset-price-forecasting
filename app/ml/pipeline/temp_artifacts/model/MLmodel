@@ -1,0 +1,23 @@
+artifact_path: s3://financial-asset-price-forecasting-495599733085-us-east-1-an/mlflow-artifacts/8/models/m-6a18e192ed584452927263d1e6f20c0f/artifacts
+flavors:
+  lightgbm:
+    code: null
+    data: model.pkl
+    lgb_version: 4.6.0
+    model_class: lightgbm.sklearn.LGBMRegressor
+    serialization_format: cloudpickle
+    skops_trusted_types: null
+  python_function:
+    data: model.pkl
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.lightgbm
+    python_version: 3.12.10
+mlflow_version: 3.11.1
+model_id: m-6a18e192ed584452927263d1e6f20c0f
+model_size_bytes: 578394
+model_uuid: m-6a18e192ed584452927263d1e6f20c0f
+prompts: null
+run_id: 4cb20c452ef14725b4769fb0532e67f7
+utc_time_created: '2026-05-04 17:11:32.810321'

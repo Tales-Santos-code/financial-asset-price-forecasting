@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     # MLflow
     MLFLOW_TRACKING_URI: str = os.getenv("MLFLOW_TRACKING_URI", "http://54.82.227.100:5000")
 
+    #github
+    GITHUB_TOKEN: str
+    GITHUB_OWNER: str
+    GITHUB_REPO: str
+
     #paths
     BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     PIPELINE_PATH: str = os.getenv("PIPELINE_PATH", f"{BASE_DIR}\\models\\pipeline_limpeza_V2.pkl")
