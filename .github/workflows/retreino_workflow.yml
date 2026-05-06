@@ -44,10 +44,13 @@ jobs:
           username: ubuntu # Usuário padrão da EC2 Ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
+          timeout: 120m # Dá um tempo generoso para o treino rodar, evitando timeouts prematuros
           script: |
             # 🚨 O BOTÃO DO HOMEM MORTO: Agenda o desligamento da máquina para daqui a 60 min.
             # Se a máquina travar por falta de RAM, ela vai se auto-desligar!
-            sudo shutdown -P +60 "Desligamento de segurança ativado pelo GitHub Actions"
+            set -e
+
+            sudo shutdown -P +120 "Desligamento de segurança ativado pelo GitHub Actions"
             
             cd /home/ubuntu
             

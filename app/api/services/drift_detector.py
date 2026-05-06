@@ -146,28 +146,33 @@ def check_data_drift(symbol: str) -> bool:
     if os.path.exists(temp_html_path):
         os.remove(temp_html_path)
     
-    # 5. Extrai os metadados (JSON) com função recursiva blindada
+# ==========================================
+    # 5. Extrai os metadados do Evidently (CORRIGIDO COM BASE NO SEU DEBUG)
+    # ==========================================
     try:
-        # Extrai o dicionário bruto
-        report_json = resultado_eval.dict()
+        report_dict = resultado_eval.dict()
         
-        # Deep Search: Acha a chave em qualquer nível do JSON
-        def achar_drift(dicionario):
-            if isinstance(dicionario, dict):
-                if "dataset_drift" in dicionario:
-                    return dicionario["dataset_drift"]
-                for valor in dicionario.values():
-                    res = achar_drift(valor)
-                    if res is not None:
-                        return res
-            elif isinstance(dicionario, list):
-                for item in dicionario:
-                    res = achar_drift(item)
-                    if res is not None:
-                        return res
-            return None
-
-        dataset_drift = achar_drift(report_json)
+        dataset_drift = False # Valor padrão de segurança
+        
+        # Navega no dicionário usando a estrutura exata revelada no log
+        for metric in report_dict.get("metrics", []):
+            config_type = metric.get("config", {}).get("type", "")
+            value_dict = metric.get("value", {})
+            
+            # A nova métrica raiz que define se o dataset inteiro "driftou"
+            if "DriftedColumnsCount" in config_type:
+                share = value_dict.get("share", 0.0)
+                threshold = metric.get("config", {}).get("drift_share", 0.5)
+                
+                # Se a proporção de colunas com drift for maior que o limite, é Drift!
+                if share >= threshold:
+                    dataset_drift = True
+                break
+                
+            # Fallback de segurança caso a DatasetDriftMetric também exista em outra parte do log
+            elif "DatasetDriftMetric" in config_type:
+                dataset_drift = value_dict.get("dataset_drift", False)
+                break
 
         logger.info(f"Status do Data Drift extraído: {dataset_drift}")
         
@@ -183,7 +188,7 @@ def check_data_drift(symbol: str) -> bool:
             return False
             
     except Exception as e:
-        logger.error(f"Erro fatal ao extrair JSON do Evidently: {e}.")
+        logger.error(f"Erro fatal ao extrair dados do Evidently: {e}")
         return False
 
 if __name__ == "__main__":
