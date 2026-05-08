@@ -34,18 +34,19 @@ def get_model_and_params(symbol: str):
         logger.info(f"⏳ Inicializando ML para {symbol}...")
         try:
             # 1. Pipeline de features (Baixa sempre o mesmo)
-            pipe_path = os.path.join(tempfile.gettempdir(), f"pipeline_{symbol}.pkl")
+            pipeline_key = "models/pipeline/pipeline.pkl"
+            pipe_path = os.path.join(tempfile.gettempdir(), pipeline_key)
             # Ajuste o nome "pipeline.pkl" se no seu S3 ele estiver dentro de alguma pasta (ex: "models/pipeline.pkl")
-            _download_model_from_s3("pipeline.pkl", pipe_path) 
+            _download_model_from_s3(pipeline_key, pipe_path) 
             
             # 2. Baixa o Modelo (O nome agora é sempre fixo graças ao Maestro)
-            model_key = f"modelo_{symbol}.pkl"
+            model_key = f"models/chamipon/modelo_{symbol}.pkl"
             model_path = os.path.join(tempfile.gettempdir(), model_key)
             _download_model_from_s3(model_key, model_path)
             
             # 3. Tenta baixar o Scaler (O Maestro apaga se não precisar)
             scaler = None
-            scaler_key = f"scaler_{symbol}.pkl"
+            scaler_key = f"models/scaler/scaler_{symbol}.pkl"
             scaler_path = os.path.join(tempfile.gettempdir(), scaler_key)
             
             try:
