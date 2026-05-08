@@ -12,7 +12,6 @@ from app.api.services.finance_service import FinanceService# noqa: E402
 class FeatureEngineering(BaseEstimator, TransformerMixin):
     def __init__(self, is_training=True):
         self.is_training = is_training
-        # REMOVIDO: self.finance_service = FinanceService() para evitar erro de pickle do yfinance
 
     def fit(self, X, y=None):
         return self

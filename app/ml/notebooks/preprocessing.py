@@ -8,7 +8,7 @@ if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
 from app.api.services.finance_service import FinanceService # noqa: E402
-from app.ml.notebooks.feature_engineer1 import FeatureEngineering # noqa: E402
+from app.ml.notebooks.feature_engineer import FeatureEngineering # noqa: E402
 
 if __name__ == "__main__":
     get_data = FinanceService()
