@@ -13,10 +13,23 @@ router = APIRouter()
 # Endpoint GET padronizado usando os Schemas
 @router.get("/stock-data-prediction", response_model=PredictionResponse)
 def predict_stock(
-    symbol: StockSymbol = Query(StockSymbol.RACE, description="Ticker da ação (ex: RACE)"),
+    # 1. Alterado de StockSymbol para str para capturarmos qualquer texto e tratarmos internamente
+    symbol: str = Query("RACE", description="Ticker da ação (ex: RACE, AAPL, NVDA)"),
 ):
-    ticker = symbol.value
+    # 2. Padroniza para maiúsculo (evita erro se o usuário digitar 'race' ou 'aapl' minúsculo)
+    ticker = symbol.upper()
     
+    # 3. Extrai a lista de valores permitidos dinamicamente do seu Enum
+    tickers_permitidos = [item.value for item in StockSymbol]
+    
+    # 4. A barreira do "Porteiro": Rejeita com erro 400 amigável antes de gastar recursos
+    if ticker not in tickers_permitidos:
+        logger.warning(f"🚫 Requisição negada: Ticker '{ticker}' não autorizado.")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"O ticker '{ticker}' não é suportado. Tickers permitidos: {', '.join(tickers_permitidos)}."
+        )
+        
     try:
         finance_api = FinanceService(ticker=ticker)
         bucket = settings.S3_BUCKET_NAME
@@ -84,7 +97,7 @@ def predict_stock(
         return resultado
 
     except ValueError as ve:
-        # Erros de regra de negócio (ex: ticker não encontrado, pipeline vazio)
+        # Erros de regra de negócio (ex: pipeline vazio)
         logger.error(f"Erro de Validação: {str(ve)}")
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:

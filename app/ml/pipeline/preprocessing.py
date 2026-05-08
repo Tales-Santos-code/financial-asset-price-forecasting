@@ -8,7 +8,6 @@ if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
 from app.api.services.finance_service import FinanceService # noqa: E402
-# IMPORTANTE: Importando a classe do novo arquivo
 from app.ml.notebooks.feature_engineer1 import FeatureEngineering # noqa: E402
 
 if __name__ == "__main__":
@@ -21,7 +20,7 @@ if __name__ == "__main__":
     max_date = df_history.index.max() if 'Date' not in df_history.columns else df_history['Date'].max()
     df_macro = get_data.get_macro_data(min_date=min_date, max_date=max_date)
 
-    # A lógica continua exatamente a mesma!
+    
     pipeline_ferrari = FeatureEngineering(is_training=True)
     
     x_transformado = pipeline_ferrari.fit_transform((df_history, df_macro))
