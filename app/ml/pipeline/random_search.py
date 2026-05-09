@@ -179,7 +179,7 @@ def main():
                     break
 
             # 2. Upload do Modelo Principal (Sempre com nome fixo!)
-            nome_modelo_s3 = f"models/champion/modelo_{symbol}.pkl"
+            nome_modelo_s3 = "models/champion/modelo.pkl"
             
             if arquivo_modelo_real and os.path.exists(arquivo_modelo_real):
                 print(f"☁️ Subindo o arquivo {arquivo_modelo_real} para o S3 como: {nome_modelo_s3}")
@@ -190,7 +190,7 @@ def main():
                 print(f"📂 O que o MLflow baixou foi: {os.listdir(local_model_dir)}")
             
             # 3. Avalia a necessidade do Scaler e salva na pasta scaler
-            nome_scaler_s3 = f"models/scaler/scaler_{symbol}.pkl"
+            nome_scaler_s3 = "models/scaler/scaler.pkl"
             modelos_com_scaler = ['lstm', 'gru']
             
             if best_model_type in modelos_com_scaler and os.path.exists(arquivo_scaler_local):

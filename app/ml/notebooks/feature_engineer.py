@@ -4,14 +4,25 @@ import pandas as pd
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
+import tempfile
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ==========================================
+# HACK DE DIRETÓRIO (CORRIGIDO)
+# Sobe 4 níveis: feature_engineer.py -> notebooks -> ml -> app -> RAIZ DO PROJETO
+# ==========================================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 sys.path.append(BASE_DIR)
-from app.api.services.finance_service import FinanceService# noqa: E402
+
+# Importações dos seus serviços internos
+from app.api.services.finance_service import FinanceService # noqa: E402
+from app.api.core.config import settings # noqa: E402
+from app.api.core.aws import get_s3_client # noqa: E402
+from app.api.services.s3 import read_csv_from_s3 # noqa: E402
 
 class FeatureEngineering(BaseEstimator, TransformerMixin):
-    def __init__(self, is_training=True):
+    def __init__(self, is_training=True, symbol="RACE"):
         self.is_training = is_training
+        self.symbol = symbol # Recebe o ticker dinamicamente para buscar a notícia certa
 
     def fit(self, X, y=None):
         return self
@@ -74,19 +85,28 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         df = self.macro_features(df)
 
         # ==========================================
-        # 3. CONTEXTO DE SENTIMENTO (Notícias LLM)
+        # 3. CONTEXTO DE SENTIMENTO (Notícias LLM via S3)
         # ==========================================
-        print("🧠 Injetando Sentimento das Notícias (FinBERT)...")
-        caminho_news = os.path.join(BASE_DIR, 'app', 'ml', 'pipeline', 'race_news.csv')
+        print(f"🧠 Injetando Sentimento das Notícias (S3) para {self.symbol}...")
         
-        if os.path.exists(caminho_news):
-            df_news = pd.read_csv(caminho_news)
-            df_news['Date'] = pd.to_datetime(df_news['Date']).dt.tz_localize(None)
+        # Nome do arquivo que criamos lá no seu Race_news_service.py
+        s3_news_key = f"data/features/{self.symbol}_news_sentiment.csv"
+        
+        try:
+            # Baixa direto da memória da AWS para o Pandas
+            df_news = read_csv_from_s3(settings.S3_BUCKET_NAME, s3_news_key)
             
-            df = pd.merge(df, df_news, on='Date', how='left')
-            df['Sentiment_Score'] = df['Sentiment_Score'].fillna(0.0)
-        else:
-            print("⚠️ Arquivo 'race_news.csv' não encontrado. Criando coluna neutra de segurança.")
+            if df_news is not None and not df_news.empty:
+                df_news['Date'] = pd.to_datetime(df_news['Date']).dt.tz_localize(None)
+                
+                df = pd.merge(df, df_news, on='Date', how='left')
+                df['Sentiment_Score'] = df['Sentiment_Score'].fillna(0.0)
+            else:
+                print("⚠️ Arquivo de notícias vazio ou não encontrado no S3. Criando coluna neutra.")
+                df['Sentiment_Score'] = 0.0
+                
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar notícias no S3: {e}. Criando coluna neutra de segurança.")
             df['Sentiment_Score'] = 0.0
 
         # ==========================================
@@ -188,19 +208,36 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         return df
     
 if __name__ == "__main__":
-    get_data = FinanceService()
+    from app.ml.notebooks.feature_engineer import FeatureEngineering
+    ticker_alvo = "RACE"
+    get_data = FinanceService(ticker=ticker_alvo)
     
-    # O método retorna um DataFrame do Pandas
-    df_history = get_data.get_historical_data(full=True)
+    print(f"📥 Baixando histórico da {ticker_alvo}...")
+    df_history = get_data.get_historical_data(full=True, use_checkpoint=False)
 
-    pipeline_ferrari = FeatureEngineering(is_training=True)
+    # Inicia a classe já com o símbolo da ação
+    pipeline_ferrari = FeatureEngineering(is_training=True, symbol=ticker_alvo)
     
     x_transformado = pipeline_ferrari.fit_transform(df_history)
     
-    caminho_csv = os.path.join('app', 'ml', 'pipeline', 'dados_transformados_V2.csv')
-    x_transformado.to_csv(caminho_csv, index=False)
-    print(f"\n📊 CSV de treino salvo em: {caminho_csv}")
-
-    caminho_pipeline = os.path.join('app', 'ml', 'pipeline', 'pipeline_limpeza_V2.pkl')
-    joblib.dump(pipeline_ferrari, caminho_pipeline)
-    print(f"📦 Pipeline pronto para uso salvo em: {caminho_pipeline}")
+    # ==========================================
+    # UPLOAD DIRETO PARA O S3
+    # ==========================================
+    print("☁️ Salvando pipeline treinado diretamente no S3...")
+    
+    bucket = settings.S3_BUCKET_NAME
+    s3_client = get_s3_client()
+    
+    # Salva num arquivo temporário seguro pelo Windows/Linux
+    temp_pipe_path = os.path.join(tempfile.gettempdir(), f"pipeline_temp_{ticker_alvo}.pkl")
+    joblib.dump(pipeline_ferrari, temp_pipe_path)
+    
+    # Sobe pro Data Lake no caminho que a API vai ler
+    s3_key = "models/pipeline/pipeline.pkl"
+    s3_client.upload_file(temp_pipe_path, bucket, s3_key)
+    
+    # Faxina: apaga da sua máquina local
+    if os.path.exists(temp_pipe_path):
+        os.remove(temp_pipe_path)
+        
+    print(f"📦 Pipeline pronto para uso e enviado com sucesso para: s3://{bucket}/{s3_key}")
