@@ -88,6 +88,7 @@ def main():
     parser.add_argument("--max_depth", type=int, default=5)      # Árvores
     parser.add_argument("--hidden_units", type=int, default=64)  # Redes Neurais
     parser.add_argument("--epochs", type=int, default=20)        # Redes Neurais
+    parser.add_argument("--verbose", action="store_true", help="Ativa logs detalhados")
     args = parser.parse_args()
 
     # 2. Configura o MLflow Local

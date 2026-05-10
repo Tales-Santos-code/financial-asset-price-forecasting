@@ -28,16 +28,26 @@ def run_trial(cmd):
     except subprocess.CalledProcessError:
         return False
 
+import argparse
+
 def main():
+    parser = argparse.ArgumentParser(description="Fábrica de Experimentos de ML para Previsão de Ativos")
+    parser.add_argument("--symbol", type=str, help="Ticker da ação para retreino")
+    parser.add_argument("--verbose", action="store_true", help="Ativa logs detalhados")
+    args = parser.parse_args()
+
     print("Iniciando Fábrica de Experimentos (5 Modelos - ML & DL)...")
     
-    # symbols = ["RACE", "NVDA", "AAPL", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "GSPC"]
-    symbols = ["RACE"]
+    if args.symbol:
+        symbols = [args.symbol]
+    else:
+        # symbols = ["RACE", "NVDA", "AAPL", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "GSPC"]
+        symbols = ["RACE"]
     
-    # ==========================================
-    # CAIXAS DE FERRAMENTAS CONDICIONAIS
-    # Cada modelo tem seus próprios hiperparâmetros
-    # ==========================================
+    if args.verbose:
+        print(f"Modo verboso ativado. Processando símbolos: {symbols}")
+
+    # ... (rest of search_spaces)
     search_spaces = {
         "xgboost": {
             "learning_rate": [0.1, 0.05, 0.01],
@@ -105,7 +115,13 @@ def main():
                 "--epochs", str(base_params["epochs"])
             ]
             
+            if args.verbose:
+                cmd.append("--verbose")
+
             print(f"   Teste {i+1}/{N_TRIALS} -> Algoritmo: {model_type.upper()} | Config: {p}")
+            if args.verbose:
+                print(f"   Executando: {' '.join(cmd)}")
+                
             run_trial(cmd)
 
     # ==========================================
@@ -125,8 +141,15 @@ def main():
 
     for symbol in symbols:
         # 🔥 Acha o experimento correto (versão 2)
-        experiment = client.get_experiment_by_name(f"predict_{symbol}_v2")
-        print("nome do experimento: ",experiment.name if experiment else f"Experimento para {symbol} não encontrado.") # Debug para verificar se o experimento existe
+        experiment_name = f"predict_{symbol}_v2"
+        experiment = client.get_experiment_by_name(experiment_name)
+        
+        if args.verbose:
+            if experiment:
+                print(f"🔍 Experimento encontrado: {experiment.name} (ID: {experiment.experiment_id})")
+            else:
+                print(f"❌ Experimento para {symbol} ({experiment_name}) não encontrado.")
+
         if not experiment:
             continue
             
@@ -155,6 +178,10 @@ def main():
                 rmse_formatado = str(raw_rmse)
 
             print(f"🥇 Vencedor Absoluto ({symbol}): {best_model_type.upper()} com RMSE: {rmse_formatado}")
+            
+            if args.verbose:
+                print(f"   Run ID: {run_id}")
+
             print("📥 Baixando artefatos do MLflow Local (S3)...")
             
             # Baixa a pasta inteira do modelo e do scaler temporariamente para a máquina local
@@ -182,7 +209,8 @@ def main():
             for root, dirs, files in os.walk(local_model_dir):
                 for file in files:
                     if file.endswith(".pkl") or file.endswith(".pth") or file.endswith(".xgb"):
-                        print(f"🔍 Encontrado arquivo de modelo: {file} na pasta {root}")
+                        if args.verbose:
+                            print(f"🔍 Encontrado arquivo de modelo: {file} na pasta {root}")
                         arquivo_modelo_real = os.path.join(root, file)
                         break
                 if arquivo_modelo_real:
@@ -197,7 +225,8 @@ def main():
                 print("✅ Upload do modelo campeão concluído com sucesso!")
             else:
                 print(f"❌ ERRO GRAVE: Nenhum arquivo de modelo encontrado na pasta {local_model_dir}")
-                print(f"📂 O que o MLflow baixou foi: {os.listdir(local_model_dir)}")
+                if args.verbose:
+                    print(f"📂 O que o MLflow baixou foi: {os.listdir(local_model_dir)}")
             
             # 3. Avalia a necessidade do Scaler e salva na pasta scaler
             nome_scaler_s3 = f"models/scaler/scaler_{symbol}.pkl"
@@ -211,7 +240,8 @@ def main():
                 print(f"⚠️ Scaler não encontrado para o modelo {best_model_type.upper()}!")
         else:
             print(f"⚠️ Nenhum teste encontrado para {symbol}. Verifique se os experimentos rodaram corretamente.")
-            print(runs.to_list())
+            if args.verbose:
+                print(f"Runs search result: {runs}")
 
     print("\n🚀 Pipeline de Auto-ML Finalizado!")
 

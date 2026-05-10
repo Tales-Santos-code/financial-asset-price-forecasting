@@ -44,13 +44,13 @@ jobs:
           username: ubuntu # Usuário padrão da EC2 Ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY
-          timeout: 120m # Dá um tempo generoso para o treino rodar, evitando timeouts prematuros
+          timeout: 240m # Dá um tempo generoso para o treino rodar, evitando timeouts prematuros
           script: |
             # 🚨 O BOTÃO DO HOMEM MORTO: Agenda o desligamento da máquina para daqui a 60 min.
             # Se a máquina travar por falta de RAM, ela vai se auto-desligar!
             set -e
 
-            sudo shutdown -P +120 "Desligamento de segurança ativado pelo GitHub Actions"
+            sudo shutdown -P +240 "Desligamento de segurança ativado pelo GitHub Actions"
             
             cd /home/ubuntu
             
@@ -85,7 +85,7 @@ jobs:
             
             # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos
             echo "Iniciando o retreino para: ${{ github.event.inputs.symbol }}"
-            PYTHONPATH=. python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }}
+            PYTHONPATH=. timeout 210m python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }} --verbose
             
             # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
             sudo shutdown -c
