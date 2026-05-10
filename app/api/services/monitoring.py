@@ -37,18 +37,20 @@ def save_prediction_log(symbol: str, features_utilizadas: pd.DataFrame, predicti
         # Salva no Data Lake
         write_json_to_s3(settings.S3_BUCKET_NAME, key, payload)
 
-        try:
-            local_dir = os.path.join(settings.BASE_DIR, "data", "predictions", symbol)
-            os.makedirs(local_dir, exist_ok=True)
+        # Salva localmente APENAS se não estiver no Lambda (para desenvolvimento local)
+        if not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            try:
+                local_dir = os.path.join(settings.BASE_DIR, "data", "predictions", symbol)
+                os.makedirs(local_dir, exist_ok=True)
+                
+                local_path = os.path.join(local_dir, f"{filename}.json")
+                
+                with open(local_path, "w", encoding="utf-8") as f:
+                    json.dump(payload, f, indent=4)
             
-            local_path = os.path.join(local_dir, f"{filename}.json")
-            
-            with open(local_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=4)
-        
-            logger.info(f"Log salvo localmente para análise de Drift: {local_path}")
-        except Exception as e:
-            logger.error(f"Falha catastrófica ao salvar log de monitoramento local: {e}")
+                logger.info(f"Log salvo localmente: {local_path}")
+            except Exception as e:
+                logger.warning(f"Aviso: Não foi possível salvar log local (comum em Cloud): {e}")
 
 
 
