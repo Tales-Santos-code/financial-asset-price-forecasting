@@ -73,8 +73,12 @@ def predict_stock(
         if df_history.empty: 
             raise ValueError(f"Sem dados para {ticker}")
         
+        # OTIMIZAÇÃO: O pipeline só precisa de ~200 dias para calcular médias móveis pesadas (ex: SMA 200)
+        # Enviar 6.000 linhas mata a performance da Lambda.
+        df_ml_input = df_history.tail(250).copy()
+        
         # Predição final
-        resultado = pipe_to_predict(ticker, df_history, df_macro)
+        resultado = pipe_to_predict(ticker, df_ml_input, df_macro)
         return resultado
 
     except ValueError as ve:

@@ -5,43 +5,43 @@ from app.api.core.logger import setup_logger
 
 logger = setup_logger("aws_core")
 
+_session_cache = None
+_s3_client_cache = None
+
 def get_aws_session() -> boto3.Session:
-    """
-    Cria e retorna uma sessão centralizada da AWS utilizando as 
-    credenciais seguras carregadas do .env (via Pydantic Settings).
-    """
+    global _session_cache
+    if _session_cache is not None:
+        return _session_cache
+        
     try:
+        region = getattr(settings, "AWS_REGION", "us-east-1")
         if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
-            # No Lambda, a melhor prática é NÃO passar credenciais.
-            # O Boto3 encontra o IAM Role automaticamente no ambiente.
-            logger.info("Execução em AWS Lambda detectada. Usando IAM Role nativo.")
-            return boto3.Session(region_name=settings.AWS_REGION)
-        
-        # Local Dev ou outros ambientes (EC2, Docker local)
-        access_key = (settings.AWS_ACCESS_KEY_ID or "").strip()
-        secret_key = (settings.AWS_SECRET_ACCESS_KEY or "").strip()
-
-        if access_key and secret_key:
-            logger.info(f"Credenciais estáticas detectadas (Local Dev). Key: {access_key[:4]}...")
-            return boto3.Session(
-                aws_access_key_id=access_key,
-                aws_secret_access_key=secret_key,
-                region_name=settings.AWS_REGION
-            )
-        
-        logger.info("Nenhuma credencial configurada. Usando Default Provider Chain.")
-        return boto3.Session(region_name=settings.AWS_REGION)
-
+            logger.info("Usando IAM Role nativo (Lambda).")
+            _session_cache = boto3.Session(region_name=region)
+        else:
+            access_key = (settings.AWS_ACCESS_KEY_ID or "").strip()
+            secret_key = (settings.AWS_SECRET_ACCESS_KEY or "").strip()
+            if access_key and secret_key:
+                _session_cache = boto3.Session(
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name=region
+                )
+            else:
+                _session_cache = boto3.Session(region_name=region)
+        return _session_cache
     except Exception as e:
-        logger.error(f"Falha ao iniciar sessão AWS: {e}")
+        logger.error(f"Erro na sessão AWS: {e}")
         raise
 
 def get_s3_client():
-    """
-    Retorna um client do S3 pronto para uso.
-    """
+    global _s3_client_cache
+    if _s3_client_cache is not None:
+        return _s3_client_cache
+        
     session = get_aws_session()
-    return session.client("s3")
+    _s3_client_cache = session.client("s3")
+    return _s3_client_cache
 
 # Se no futuro você precisar de outro serviço, é só adicionar aqui:
 # def get_dynamodb_client(): ...
