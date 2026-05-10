@@ -1,7 +1,9 @@
+# ruff: noqa: E402
 import os
 import random
 import subprocess
 import sys
+import argparse
 import mlflow
 from mlflow.tracking import MlflowClient
 from mlflow import artifacts
@@ -28,7 +30,6 @@ def run_trial(cmd):
     except subprocess.CalledProcessError:
         return False
 
-import argparse
 
 def main():
     parser = argparse.ArgumentParser(description="Fábrica de Experimentos de ML para Previsão de Ativos")
