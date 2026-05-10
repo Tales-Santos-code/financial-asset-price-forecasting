@@ -11,32 +11,27 @@ def get_aws_session() -> boto3.Session:
     credenciais seguras carregadas do .env (via Pydantic Settings).
     """
     try:
-        # Detecta se está rodando no Lambda
-        is_lambda = os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+        if os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            # No Lambda, a melhor prática é NÃO passar credenciais.
+            # O Boto3 encontra o IAM Role automaticamente no ambiente.
+            logger.info("Execução em AWS Lambda detectada. Usando IAM Role nativo.")
+            return boto3.Session(region_name=settings.AWS_REGION)
         
+        # Local Dev ou outros ambientes (EC2, Docker local)
         access_key = (settings.AWS_ACCESS_KEY_ID or "").strip()
         secret_key = (settings.AWS_SECRET_ACCESS_KEY or "").strip()
 
-        session_kwargs = {"region_name": settings.AWS_REGION}
+        if access_key and secret_key:
+            logger.info(f"Credenciais estáticas detectadas (Local Dev). Key: {access_key[:4]}...")
+            return boto3.Session(
+                aws_access_key_id=access_key,
+                aws_secret_access_key=secret_key,
+                region_name=settings.AWS_REGION
+            )
         
-        if access_key and secret_key and not is_lambda:
-            # Local Dev: usamos as chaves do .env
-            masked_key = f"{access_key[:4]}...{access_key[-4:]}" if len(access_key) > 8 else "****"
-            logger.info(f"Local Dev detectado. Usando credenciais estáticas: {masked_key}")
-            session_kwargs["aws_access_key_id"] = access_key
-            session_kwargs["aws_secret_access_key"] = secret_key
-        elif is_lambda:
-            # Em Produção (Lambda): Confiamos no ambiente, mas avisamos se houver chaves estáticas
-            ak = os.environ.get("AWS_ACCESS_KEY_ID", "")
-            if ak.startswith("AKIA"):
-                logger.warning(f"Atenção: Chave estática AKIA detectada no Lambda ({ak[:4]}...). Isso pode causar erro se for inválida.")
-            logger.info("Ambiente Lambda detectado. Usando credenciais do ambiente (IAM Role).")
-        else:
-            logger.info("Nenhuma credencial estática encontrada. Usando Default Provider Chain.")
+        logger.info("Nenhuma credencial configurada. Usando Default Provider Chain.")
+        return boto3.Session(region_name=settings.AWS_REGION)
 
-        session = boto3.Session(**session_kwargs)
-        logger.info(f"Sessão AWS inicializada. Provider: {session.get_credentials().method if session.get_credentials() else 'None'}")
-        return session 
     except Exception as e:
         logger.error(f"Falha ao iniciar sessão AWS: {e}")
         raise
