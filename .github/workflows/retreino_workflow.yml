@@ -85,7 +85,7 @@ jobs:
             
             # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos
             echo "Iniciando o retreino para: ${{ github.event.inputs.symbol }}"
-            python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }}
+            PYTHONPATH=. python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }}
             
             # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
             sudo shutdown -c
