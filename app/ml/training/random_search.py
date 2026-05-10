@@ -119,7 +119,7 @@ def main():
     os.makedirs(temp_download_dir, exist_ok=True)
     
     # Coleta o nome do bucket do ambiente ou define fixo
-    BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "financial-asset-price-forecasting-495599733085-us-east-1-an")
+    _BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "financial-asset-price-forecasting-495599733085-us-east-1-an")
 
     for symbol in symbols:
         # 🔥 Acha o experimento correto (versão 2)

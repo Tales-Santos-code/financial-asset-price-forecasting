@@ -1,4 +1,3 @@
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from unittest.mock import patch
@@ -6,7 +5,6 @@ from unittest.mock import patch
 # Importe a rota de monitoramento
 # Ajuste o caminho se o nome do seu arquivo ou pasta for diferente
 from app.api.routers.monitoring_router import router 
-from app.api.schemas.prediction_schema import StockSymbol
 
 # Cria um app FastAPI "falso" apenas para testar essas rotas
 app = FastAPI()

@@ -168,7 +168,6 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
         'RSI_14', 'MACD_Line', 'MACD_Signal', 'MACD_Histogram', 'ATR_14', 'ATR_Pct'
     ]
     
-    import numpy as np
     # Reordena e garante que todas existam (preenche Target com 0 se faltar)
     X_full = df_limpo.reindex(columns=colunas_treino, fill_value=0.0)
     X_full = X_full.replace([np.inf, -np.inf], np.nan).fillna(0.0)

@@ -1,6 +1,6 @@
 import pytest
 import pandas as pd
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, mock_open
 from datetime import datetime
 
 # Ajuste o caminho se o seu arquivo estiver em outro lugar

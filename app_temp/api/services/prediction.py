@@ -11,7 +11,6 @@ from app.api.core.logger import setup_logger
 from app.api.services.monitoring import save_prediction_log
 from app.api.core.aws import get_s3_client
 from app.api.services.s3 import read_csv_from_s3, write_csv_to_s3
-from app.ml.pipeline.train_worker import SimpleLSTM, SimpleGRU
 
 logger = setup_logger(__name__)
 _model_cache = {}
@@ -95,10 +94,12 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
     # Se o modelo sabe quais colunas ele precisa, puxamos APENAS elas
     if hasattr(model, 'feature_name_'):
         colunas_exatas = [c for c in model.feature_name_ if c in df_features.columns]
-        if colunas_exatas: df_features = df_features[colunas_exatas]
+        if colunas_exatas:
+            df_features = df_features[colunas_exatas]
     elif hasattr(model, 'feature_names_in_'):
         colunas_exatas = [c for c in model.feature_names_in_ if c in df_features.columns]
-        if colunas_exatas: df_features = df_features[colunas_exatas]
+        if colunas_exatas:
+            df_features = df_features[colunas_exatas]
         
     dataset_cru = np.nan_to_num(df_features.values)
     

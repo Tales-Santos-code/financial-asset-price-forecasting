@@ -1,9 +1,10 @@
+# ruff: noqa: E402
 import pytest
 import numpy as np
 import pandas as pd
 import sys
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 # ==========================================
 # HACK DE DIRETÓRIO PARA O PYTEST
