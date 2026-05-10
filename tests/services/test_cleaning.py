@@ -83,7 +83,7 @@ def test_historical_cleaning_sucesso_simples(mock_write_s3, mock_get_model, mock
     mock_read_s3.return_value = mock_df_history
     mock_pipeline.transform.return_value = mock_df_cleaned
     # A função get_model_and_params retorna uma tupla (pipeline, model), mockamos os dois
-    mock_get_model.return_value = (mock_pipeline, MagicMock())
+    mock_get_model.return_value = (mock_pipeline, MagicMock(), None)
     
     # Ação (Chamando sem o df_macro)
     historical_cleaning("RACE")
@@ -109,7 +109,7 @@ def test_historical_cleaning_sucesso_com_macro(mock_write_s3, mock_get_model, mo
     # Setup
     mock_read_s3.return_value = mock_df_history
     mock_pipeline.transform.return_value = mock_df_cleaned
-    mock_get_model.return_value = (mock_pipeline, MagicMock())
+    mock_get_model.return_value = (mock_pipeline, MagicMock(), None)
     
     # Ação (Passando o df_macro)
     historical_cleaning("RACE", df_macro=mock_df_macro)
@@ -126,7 +126,7 @@ def test_historical_cleaning_sucesso_com_macro(mock_write_s3, mock_get_model, mo
 def test_historical_cleaning_fallback_exception(mock_write_s3, mock_get_model, mock_read_s3, mock_df_history, mock_df_macro, mock_df_cleaned, mock_pipeline):
     # Setup
     mock_read_s3.return_value = mock_df_history
-    mock_get_model.return_value = (mock_pipeline, MagicMock())
+    mock_get_model.return_value = (mock_pipeline, MagicMock(), None)
     
     # Finge que o "try" de rodar com a tupla vai dar ERRO, e a segunda tentativa vai dar CERTO
     mock_pipeline.transform.side_effect = [

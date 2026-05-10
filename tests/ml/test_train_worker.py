@@ -9,14 +9,14 @@ from unittest.mock import patch, MagicMock
 # HACK DE DIRETÓRIO PARA O PYTEST
 # ==========================================
 # Adiciona a pasta exata onde os scripts de ML estão ao "radar" do Python.
-caminho_ml = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../app/ml/pipeline'))
+caminho_ml = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../app/ml/training'))
 sys.path.insert(0, caminho_ml)
 
 # Import base
-from app.ml.pipeline.train_worker import create_sequences, main
+from app.ml.training.train_worker import create_sequences, main
 
 # Caminho base atualizado para os Mocks
-PATCH_BASE = "app.ml.pipeline.train_worker"
+PATCH_BASE = "app.ml.training.train_worker"
 
 # ==========================================
 # FIXTURES E DADOS FALSOS (MOCKS)
@@ -55,8 +55,9 @@ def test_create_sequences():
     assert len(X) == 6
     assert len(y) == 6
     
-    # A primeira sequência (X) deve ter os dias 1, 2 e 3
-    assert np.array_equal(X[0], [[1, 10], [2, 20], [3, 30]])
+    # A primeira sequência (X) deve ter os dias 1, 2 e 3 — mas SEM a coluna target (índice 1)
+    # A função exclui target_index das features, então X[0] tem apenas a coluna 0 (valores 1,2,3)
+    assert np.array_equal(X[0], [[1], [2], [3]])
     
     # O alvo (y) do primeiro X deve ser o dia 4 da coluna target_index (valor 40)
     assert y[0] == 40

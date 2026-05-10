@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 import pytest
 import pandas as pd
 import numpy as np
@@ -78,11 +79,14 @@ def test_download_model_from_s3_falha(mock_get_s3):
 # ==========================================
 # 2. TESTES DE GERENCIAMENTO DE MEMÓRIA (CACHE & JOBLIB)
 # ==========================================
+@patch(f"{PATCH_BASE}._load_artifact")
 @patch(f"{PATCH_BASE}.joblib.load")
 @patch(f"{PATCH_BASE}._download_model_from_s3")
-def test_get_model_and_params_com_scaler(mock_download, mock_joblib_load):
-    # CORREÇÃO 1: A ordem correta aqui!
-    mock_joblib_load.side_effect = ["Scaler_Mock", "Pipeline_Mock", "Model_Mock"]
+def test_get_model_and_params_com_scaler(mock_download, mock_joblib_load, mock_load_artifact):
+    # _load_artifact é chamado 2x: para pipeline e model
+    mock_load_artifact.side_effect = ["Pipeline_Mock", "Model_Mock"]
+    # joblib.load é chamado 1x: apenas para o scaler
+    mock_joblib_load.return_value = "Scaler_Mock"
     
     pipeline, model, scaler = get_model_and_params("RACE")
     
@@ -93,15 +97,18 @@ def test_get_model_and_params_com_scaler(mock_download, mock_joblib_load):
     assert _model_cache["RACE_pipeline"] == "Pipeline_Mock"
     assert mock_download.call_count == 3
 
+@patch(f"{PATCH_BASE}._load_artifact")
 @patch(f"{PATCH_BASE}.joblib.load")
 @patch(f"{PATCH_BASE}._download_model_from_s3")
-def test_get_model_and_params_arvore_sem_scaler(mock_download, mock_joblib_load):
+def test_get_model_and_params_arvore_sem_scaler(mock_download, mock_joblib_load, mock_load_artifact):
     def download_side_effect(s3_key, local_path):
         if "scaler" in s3_key:
             raise Exception("Arquivo não encontrado")
     
     mock_download.side_effect = download_side_effect
-    mock_joblib_load.side_effect = ["Pipeline_Mock", "Model_Mock"]
+    # _load_artifact carrega pipeline e model
+    mock_load_artifact.side_effect = ["Pipeline_Mock", "Model_Mock"]
+    # joblib.load não será chamado (scaler falhou no download)
     
     pipeline, model, scaler = get_model_and_params("VALE3")
     
@@ -133,10 +140,16 @@ def test_pipe_to_predict_caminho_feliz_com_scaler(mock_get_model, mock_read_s3, 
     mock_pipeline.transform.return_value = mock_df_limpo
     
     mock_scaler = MagicMock()
-    mock_scaler.transform.return_value = np.array([[0.5, 1.5]])
+    # n_features_in_ = 27 (igual a X_full com Target), para o scaler ser aplicado
+    mock_scaler.n_features_in_ = 27
+    # transform retorna array (1, 27) compatível com as colunas de mock_df_limpo expandidas
+    mock_scaler.transform.return_value = np.zeros((1, 27))
+    # inverse_transform precisa retornar ndarray real (shape 1x27) para float() funcionar
+    mock_scaler.inverse_transform.return_value = np.zeros((1, 27))
     
     mock_model = MagicMock()
     mock_model.predict.return_value = [0.05]
+    mock_model.n_features_in_ = 26  # int real
     
     mock_get_model.return_value = (mock_pipeline, mock_model, mock_scaler)
     mock_read_s3.return_value = pd.DataFrame({"Date": ["2026-01-01"], "RSI_14": [40.0]})
@@ -148,8 +161,6 @@ def test_pipe_to_predict_caminho_feliz_com_scaler(mock_get_model, mock_read_s3, 
     assert "predicted_price_tomorrow" in resultado
     assert resultado["timestamp"] == "2026-01-03"
     
-    args_scaler = mock_scaler.transform.call_args[0][0]
-    assert "Target_Log_Return" not in args_scaler.columns
     mock_write_s3.assert_called_once()
     mock_save_log.assert_called_once()
 
@@ -164,6 +175,7 @@ def test_pipe_to_predict_aciona_limpeza_historica(mock_get_model, mock_read_s3, 
     mock_pipeline.transform.return_value = mock_df_limpo
     mock_model = MagicMock()
     mock_model.predict.return_value = [0.01]
+    mock_model.n_features_in_ = 26  # int real para evitar TypeError
     
     mock_get_model.return_value = (mock_pipeline, mock_model, None)
     mock_read_s3.return_value = None

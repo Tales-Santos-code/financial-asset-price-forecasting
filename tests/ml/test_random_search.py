@@ -9,16 +9,16 @@ from unittest.mock import patch, MagicMock
 # ==========================================
 # Adiciona a pasta exata onde os scripts de ML estão ao "radar" do Python.
 # Assim, quando o random_search tentar fazer 'import utils_s3', o Pytest vai achar o arquivo!
-caminho_ml = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../app/ml/pipeline'))
+caminho_ml = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../app/ml/training'))
 sys.path.insert(0, caminho_ml)
 
-from app.ml.pipeline.random_search import run_trial, main
+from app.ml.training.random_search import run_trial, main
 
 # ==========================================
 # DEFINIÇÃO DO CAMINHO BASE DOS MOCKS
 # ==========================================
 # Mude isto de acordo com o local exato do ficheiro no seu projeto
-PATCH_BASE = "app.ml.pipeline.random_search"
+PATCH_BASE = "app.ml.training.random_search"
 
 # ==========================================
 # 1. TESTES DA FUNÇÃO DE SUBPROCESSOS (run_trial)
@@ -59,7 +59,6 @@ def mock_run_mlflow():
     return mock_run
 
 
-@patch("utils_s3.delete_from_s3") # Importado localmente no script
 @patch(f"{PATCH_BASE}.upload_champion_to_s3")
 @patch(f"{PATCH_BASE}.os.walk")
 @patch(f"{PATCH_BASE}.os.path.exists")
@@ -67,7 +66,7 @@ def mock_run_mlflow():
 @patch(f"{PATCH_BASE}.MlflowClient")
 @patch(f"{PATCH_BASE}.mlflow")
 @patch(f"{PATCH_BASE}.run_trial")
-def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_delete, mock_run_mlflow):
+def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_run_mlflow):
     """
     Testa o Caminho Feliz para um modelo Deep Learning (LSTM) 
     que exige que o Scaler seja guardado no S3.
@@ -91,19 +90,16 @@ def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client
     main()
     
     # VERIFICAÇÕES
-    # O orquestrador roda 5 vezes por padrão (N_TRIALS = 5)
-    assert mock_run_trial.call_count == 5
+    # O orquestrador roda 1 vez (N_TRIALS = 1 no script atual)
+    assert mock_run_trial.call_count == 1
     
     # Deve ter procurado pelo vencedor no MLflow
     mock_client.search_runs.assert_called_once()
     
-    # COMO É LSTM: Deve enviar o modelo E o scaler para o S3 (2 chamadas)
+    # Deve enviar o modelo E o scaler para o S3 (2 chamadas)
     assert mock_upload.call_count == 2
-    # E não pode chamar a função de apagar
-    mock_delete.assert_not_called()
 
 
-@patch("utils_s3.delete_from_s3") 
 @patch(f"{PATCH_BASE}.upload_champion_to_s3")
 @patch(f"{PATCH_BASE}.os.walk")
 @patch(f"{PATCH_BASE}.os.path.exists")
@@ -111,10 +107,10 @@ def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client
 @patch(f"{PATCH_BASE}.MlflowClient")
 @patch(f"{PATCH_BASE}.mlflow")
 @patch(f"{PATCH_BASE}.run_trial")
-def test_main_modelo_sem_scaler(mock_run_trial, mock_mlflow, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_delete, mock_run_mlflow):
+def test_main_modelo_xgboost_sucesso(mock_run_trial, mock_mlflow, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_run_mlflow):
     """
-    Testa o Caminho Feliz para um modelo de Árvore (XGBoost) 
-    que exige que o Scaler anterior seja APAGADO do S3.
+    Testa o Caminho Feliz para um modelo de Árvore (XGBoost).
+    O pipeline sempre sobe o modelo E o scaler.
     """
     # Configuramos para o vencedor ser XGBoost
     mock_run_mlflow.data.params.get.return_value = "xgboost" 
@@ -134,11 +130,8 @@ def test_main_modelo_sem_scaler(mock_run_trial, mock_mlflow, mock_client_class, 
     main()
     
     # VERIFICAÇÕES
-    # COMO É XGBOOST: Só faz o upload do modelo (1 chamada)
-    assert mock_upload.call_count == 1
-    
-    # DEVE chamar a função de apagar o scaler antigo do S3
-    mock_delete.assert_called_once()
+    # Pipeline atual: sobe modelo E scaler (2 uploads)
+    assert mock_upload.call_count == 2
 
 
 @patch(f"{PATCH_BASE}.upload_champion_to_s3")

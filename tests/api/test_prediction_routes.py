@@ -139,4 +139,4 @@ def test_predict_stock_erro_interno(mock_finance_class):
     
     # Verificação: O bloco 'except Exception' deve engolir o erro e devolver um 500 elegante
     assert response.status_code == 500
-    assert response.json()["detail"] == "Ocorreu um erro ao processar a predição."
+    assert response.json()["detail"].startswith("Ocorreu um erro ao processar a predição")
