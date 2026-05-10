@@ -85,7 +85,7 @@ jobs:
             
             # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos
             echo "Iniciando o retreino para: ${{ github.event.inputs.symbol }}"
-            PYTHONPATH=. timeout 210m python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }} --verbose
+            PYTHONPATH=. PYTHONUNBUFFERED=1 timeout 210m python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }} --verbose
             
             # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
             sudo shutdown -c

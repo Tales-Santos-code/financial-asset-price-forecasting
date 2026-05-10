@@ -23,11 +23,15 @@ from app.ml.utils.utils_s3 import upload_champion_to_s3
 BASE_DIR = os.getenv("BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
 
 def run_trial(cmd):
-    """Executa o script do operário escondendo os logs poluidors do terminal."""
+    """Executa o script do operário garantindo que os logs apareçam no terminal em tempo real."""
     try:
+        # Usamos check_call para que a saída do worker vá direto para o nosso stdout
         subprocess.check_call(cmd)
+        sys.stdout.flush()
         return True
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
+        print(f"   ❌ Erro ao executar teste: {e}")
+        sys.stdout.flush()
         return False
 
 

@@ -213,6 +213,10 @@ def main():
                 loss = criterion(out, y_train_t)
                 loss.backward()
                 optimizer.step()
+                
+                # Log de progresso para evitar timeout e dar feedback
+                if (epoch + 1) % 10 == 0 or epoch == 0 or (epoch + 1) == args.epochs:
+                    print(f"      [DL] Época {epoch+1}/{args.epochs} - Loss: {loss.item():.6f}")
 
             # Predição
             model.eval()
