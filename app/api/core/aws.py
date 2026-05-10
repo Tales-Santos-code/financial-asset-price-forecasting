@@ -10,19 +10,25 @@ def get_aws_session() -> boto3.Session:
     credenciais seguras carregadas do .env (via Pydantic Settings).
     """
     try:
-        # Se as chaves estiverem presentes (Local Dev), usamos elas.
-        # Se não, deixamos o boto3 buscar automaticamente (IAM Role no Lambda).
+        # Detecta se está rodando no Lambda
+        is_lambda = os.environ.get("AWS_LAMBDA_FUNCTION_NAME") is not None
+        
+        access_key = (settings.AWS_ACCESS_KEY_ID or "").strip()
+        secret_key = (settings.AWS_SECRET_ACCESS_KEY or "").strip()
+
         session_kwargs = {"region_name": settings.AWS_REGION}
         
-        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
-            session_kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID
-            session_kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY
-            logger.info("Usando credenciais estáticas da AWS.")
+        if access_key and secret_key:
+            # Se as chaves estiverem presentes (Local Dev ou configuradas explicitamente)
+            masked_key = f"{access_key[:4]}...{access_key[-4:]}" if len(access_key) > 8 else "****"
+            logger.info(f"Usando credenciais estáticas. Key ID: {masked_key}")
+            session_kwargs["aws_access_key_id"] = access_key
+            session_kwargs["aws_secret_access_key"] = secret_key
         else:
-            logger.info("Credenciais não fornecidas. Usando IAM Role/Default Provider Chain.")
+            logger.info(f"Credenciais estáticas não detectadas. Ambiente Lambda: {is_lambda}. Usando IAM Role.")
 
         session = boto3.Session(**session_kwargs)
-        logger.info("Sessão AWS criada com sucesso.")
+        logger.info(f"Sessão AWS inicializada. Provider: {session.get_credentials().method if session.get_credentials() else 'None'}")
         return session 
     except Exception as e:
         logger.error(f"Falha ao iniciar sessão AWS: {e}")
