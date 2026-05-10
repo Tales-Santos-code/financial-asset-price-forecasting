@@ -77,7 +77,7 @@ jobs:
             # Dá um tempo para o banco e o servidor MLflow iniciarem completamente
             echo "Aguardando o MLflow ficar online..."
             for i in {1..20}; do
-              if curl -s http://127.0.0.1:5000/health > /dev/null; then
+              if curl -s -f http://127.0.0.1:5000/ping > /dev/null; then
                 echo "✅ MLflow está online!"
                 break
               fi
