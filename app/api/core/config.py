@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = "financial-asset-price-forecasting-495599733085-us-east-1-an"
     
     # MLflow
-    MLFLOW_TRACKING_URI: str = os.getenv("MLFLOW_TRACKING_URI", "http://54.82.227.100:5000")
+    MLFLOW_TRACKING_URI: str = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
     # github (Opcionais se não for usar integração direta no Lambda)
     GITHUB_TOKEN: str | None = None

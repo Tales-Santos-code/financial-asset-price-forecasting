@@ -39,7 +39,7 @@ jobs:
         env: 
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          MLFLOW_TRACKING_URI: http://localhost:5000
+          MLFLOW_TRACKING_URI: http://127.0.0.1:5000
         with:
           host: ${{ steps.get-ip.outputs.ip }}
           username: ubuntu # Usuário padrão da EC2 Ubuntu
@@ -77,7 +77,7 @@ jobs:
             # Dá um tempo para o banco e o servidor MLflow iniciarem completamente
             echo "Aguardando o MLflow ficar online..."
             for i in {1..20}; do
-              if curl -s http://localhost:5000/health > /dev/null; then
+              if curl -s http://127.0.0.1:5000/health > /dev/null; then
                 echo "✅ MLflow está online!"
                 break
               fi
