@@ -87,7 +87,7 @@ def main():
         }
     }
 
-    N_TRIALS = 1  # Vai rodar N sorteios no total por Ação
+    N_TRIALS = 5  # Vai rodar N sorteios no total por Ação
     script_path = os.path.join(os.path.dirname(__file__), "train_worker.py")
 
     # ==========================================
