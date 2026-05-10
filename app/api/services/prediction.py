@@ -1,20 +1,19 @@
+
 import os
 import tempfile
 import joblib
 import numpy as np
 import pandas as pd
+import torch
 
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
 from app.api.services.monitoring import save_prediction_log
 from app.api.core.aws import get_s3_client
-
-# Importação dos serviços de S3
 from app.api.services.s3 import read_csv_from_s3, write_csv_to_s3
+from app.ml.pipeline.train_worker import SimpleLSTM, SimpleGRU
 
 logger = setup_logger(__name__)
-
-# Cache em memória para os modelos (Singleton)
 _model_cache = {}
 
 def _download_model_from_s3(s3_key: str, local_temp_path: str):
@@ -33,20 +32,17 @@ def get_model_and_params(symbol: str):
     if cache_key not in _model_cache:
         logger.info(f"⏳ Inicializando ML para {symbol}...")
         try:
-            # 1. Pipeline de features
             pipeline_key = "models/pipeline/pipeline.pkl"
-            pipe_path = os.path.join(tempfile.gettempdir(), "pipeline.pkl")
+            pipe_path = os.path.join(tempfile.gettempdir(), f"pipeline_{symbol}.pkl")
             _download_model_from_s3(pipeline_key, pipe_path) 
             
-            # 2. Baixa o Modelo
-            model_key = "models/champion/modelo.pkl"
-            model_path = os.path.join(tempfile.gettempdir(), "modelo.pkl")
+            model_key = f"models/champion/modelo_{symbol}.pkl"
+            model_path = os.path.join(tempfile.gettempdir(), f"modelo_{symbol}.pkl")
             _download_model_from_s3(model_key, model_path)
             
-            # 3. Tenta baixar o Scaler 
             scaler = None
-            scaler_key = "models/scaler/scaler.pkl"
-            scaler_path = os.path.join(tempfile.gettempdir(), "scaler.pkl")
+            scaler_key = f"models/scaler/scaler_{symbol}.pkl"
+            scaler_path = os.path.join(tempfile.gettempdir(), f"scaler_{symbol}.pkl")
             
             try:
                 _download_model_from_s3(scaler_key, scaler_path)
@@ -55,9 +51,13 @@ def get_model_and_params(symbol: str):
             except Exception:
                 logger.info("⚡ Nenhum scaler no S3. Assumindo modelo baseado em árvore.")
             
-            # Salva no cache da memória RAM da Lambda
             _model_cache[f"{symbol}_pipeline"] = joblib.load(pipe_path)
-            _model_cache[f"{symbol}_model"] = joblib.load(model_path)
+            try:
+                _model_cache[f"{symbol}_model"] = joblib.load(model_path)
+            except Exception:
+                logger.info("🔄 Tentando carregar o modelo via PyTorch...")
+                _model_cache[f"{symbol}_model"] = torch.load(model_path, weights_only=False)
+                
             _model_cache[f"{symbol}_scaler"] = scaler
             
             logger.info("✅ Artefatos carregados na memória com sucesso!")
@@ -69,9 +69,6 @@ def get_model_and_params(symbol: str):
     return _model_cache[f"{symbol}_pipeline"], _model_cache[f"{symbol}_model"], _model_cache[f"{symbol}_scaler"]
 
 def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFrame) -> dict:
-    """
-    Recebe os dados crus, processa no pipeline e gera a predição final.
-    """
     logger.info(f"Iniciando pipe de inferência para {symbol}...")
     
     pipeline, model, scaler = get_model_and_params(symbol)
@@ -88,12 +85,21 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
         raise ValueError("DataFrame vazio após passar pelo pipeline. Verifique tratamento de nulos.")
         
     # ==========================================
-    # LÓGICA DA JANELA DE TEMPO (O SEGREDO DOS 648)
+    # CORREÇÃO FATO 1: SELEÇÃO EXATA DE FEATURES
     # ==========================================
-    # Removemos a Data para deixar só os números, igual no treinamento
-    df_features = df_limpo.drop(columns=['Date'], errors='ignore')
+    # Remove APENAS a Data. O Target_Log_Return DEVE ficar na matriz de features, 
+    # pois o train_worker usou ele (via fatiamento ':') no create_sequences.
+    # Remove a Data e remove obrigatoriamente a coluna do Gabarito (que estará vazia hoje)
+    df_features = df_limpo.drop(columns=['Date', 'Target_Log_Return'], errors='ignore')
     
-    # Preenche Nulos (se houver) e converte para Matriz NumPy
+    # Se o modelo sabe quais colunas ele precisa, puxamos APENAS elas
+    if hasattr(model, 'feature_name_'):
+        colunas_exatas = [c for c in model.feature_name_ if c in df_features.columns]
+        if colunas_exatas: df_features = df_features[colunas_exatas]
+    elif hasattr(model, 'feature_names_in_'):
+        colunas_exatas = [c for c in model.feature_names_in_ if c in df_features.columns]
+        if colunas_exatas: df_features = df_features[colunas_exatas]
+        
     dataset_cru = np.nan_to_num(df_features.values)
     
     if scaler is not None:
@@ -104,31 +110,27 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
 
     num_features = dataset_scaled.shape[1]
     
-    # Descobre automaticamente o tamanho da janela de tempo do modelo campeão
-    if hasattr(model, 'n_features_in_'):
-        seq_length = int(model.n_features_in_ / num_features)
-    elif hasattr(model, 'n_features_'): # Versões antigas do LightGBM
-        seq_length = int(model.n_features_ / num_features)
+    # Prevenção absoluta do seq_length = 0 
+    if hasattr(model, 'n_features_in_') and num_features > 0:
+        seq_length = max(1, int(model.n_features_in_ / num_features))
+    elif hasattr(model, 'n_features_') and num_features > 0:
+        seq_length = max(1, int(model.n_features_ / num_features))
     else:
-        seq_length = 24 # Fallback para Deep Learning (LSTM/GRU)
+        seq_length = 24 
         
     if len(dataset_scaled) < seq_length:
         raise ValueError(f"Histórico insuficiente. O modelo requer {seq_length} dias, mas temos apenas {len(dataset_scaled)}.")
 
-    # Extrai exatamente os últimos N dias necessários
-    janela_temporal = dataset_scaled[-seq_length:] # Shape exato da base do modelo
+    # Fatiamento seguro 
+    janela_temporal = dataset_scaled[-seq_length:] 
     
-   # Verifica se é um modelo PyTorch (Rede Neural) ou Árvore
     is_pytorch = hasattr(model, 'eval') and hasattr(model, 'forward')
     
     if not is_pytorch:
-        # Achata a matriz! Transforma ex: (24 dias, 27 features) em (1, 648)
         X_pred_final = janela_temporal.reshape(1, -1)
         logger.info(f"🧠 Gerando previsão de Árvore. Shape de entrada: {X_pred_final.shape}")
         log_return_previsto_cru = model.predict(X_pred_final)[0]
     else:
-        # Cria um tensor 3D para a Rede Neural (1, 24, 27)
-        import torch
         X_pred_final = torch.tensor(janela_temporal, dtype=torch.float32).unsqueeze(0)
         logger.info(f"🧠 Gerando previsão Neural. Shape de entrada: {X_pred_final.shape}")
         
@@ -137,27 +139,22 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
             log_return_previsto_cru = model(X_pred_final).numpy().flatten()[0]
 
     # ==========================================
-    # A MÁGICA DA DESNORMALIZAÇÃO (O MOTIVO DOS 600)
+    # CORREÇÃO FATO 2: DESNORMALIZAÇÃO DO PREÇO
     # ==========================================
     if scaler is not None:
-        # 1. Descobre em qual coluna o Target estava na hora do treinamento
-        target_idx = list(df_features.columns).index('Target_Log_Return')
-        
-        # 2. Cria uma linha de zeros com o formato exato que o scaler espera (ex: 27 colunas)
-        dummy_row = np.zeros((1, num_features))
-        
-        # 3. Injeta a predição escalonada na coluna correta
-        dummy_row[0, target_idx] = log_return_previsto_cru
-        
-        # 4. Faz o caminho reverso (Inverse Transform) e extrai o valor real
-        log_return_real = scaler.inverse_transform(dummy_row)[0, target_idx]
-        logger.info(f"🔄 Desescalonando: de {log_return_previsto_cru:.4f} para {log_return_real:.4f}")
+        try:
+            target_idx = list(df_limpo.columns).index('Target_Log_Return') - 1
+            dummy_row = np.zeros((1, scaler.n_features_in_))
+            dummy_row[0, target_idx] = log_return_previsto_cru
+            log_return_real = scaler.inverse_transform(dummy_row)[0, target_idx]
+            logger.info(f"🔄 Desescalonando: de {log_return_previsto_cru:.4f} para {log_return_real:.4f}")
+        except Exception:
+            logger.warning("Falha na desnormalização exata. Usando valor cru.")
+            log_return_real = float(log_return_previsto_cru)
     else:
+        # ATENÇÃO: Se não há scaler no S3, o modelo DEVE ter sido treinado sem escalar o 'y'!
         log_return_real = float(log_return_previsto_cru)
 
-    # ==========================================
-    # CÁLCULOS E REGISTRO
-    # ==========================================
     preco_previsto = ultimo_preco * np.exp(log_return_real)
     variacao_pct = (np.exp(log_return_real) - 1) * 100
     
@@ -169,13 +166,9 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
         "timestamp": data_ref
     }
     
-    # Salva o log do Evidently usando apenas o último dia como representação no JSON
     X_log_df = pd.DataFrame(janela_temporal[-1:], columns=df_features.columns)
     save_prediction_log(symbol, X_log_df, resultado)
     
-    # ==========================================
-    # CARGA INCREMENTAL DOS DADOS TRANSFORMADOS NO S3
-    # ==========================================
     from app.api.services.cleaning import historical_cleaning
     
     cleaned_s3_key = f"data/processed/{symbol}_historical_cleaned.csv"

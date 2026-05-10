@@ -103,8 +103,8 @@ def main():
     # ==========================================
     # 2. BUSCA DO CAMPEÃO E DEPLOY PARA O S3
     # ==========================================
-    print("\nBuscando o Grande Campeão no MLflow...")
-    mlflow.set_tracking_uri("http://localhost:5000")
+    print("\n🏆 Buscando o Grande Campeão no MLflow...")
+    mlflow.set_tracking_uri("http://mlflow-server:5000")
     client = MlflowClient()
 
     # Criamos uma pasta temporária segura no Windows para os downloads
@@ -115,8 +115,9 @@ def main():
     BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "financial-asset-price-forecasting-495599733085-us-east-1-an")
 
     for symbol in symbols:
-        experiment = client.get_experiment_by_name(f"predict_{symbol}")
-        print("nome do experimento: ",experiment.name if experiment else f"Experimento para {symbol} não encontrado.") # Debug para verificar se o experimento existe
+        # 🔥 Acha o experimento correto
+        experiment = client.get_experiment_by_name(f"predict_{symbol}_v2")
+        print("nome do experimento: ", experiment.name if experiment else f"Experimento para {symbol} não encontrado.")
         if not experiment:
             continue
             
@@ -179,7 +180,7 @@ def main():
                     break
 
             # 2. Upload do Modelo Principal (Sempre com nome fixo!)
-            nome_modelo_s3 = "models/champion/modelo.pkl"
+            nome_modelo_s3 = f"models/champion/modelo_{symbol}.pkl"
             
             if arquivo_modelo_real and os.path.exists(arquivo_modelo_real):
                 print(f"☁️ Subindo o arquivo {arquivo_modelo_real} para o S3 como: {nome_modelo_s3}")
@@ -190,7 +191,7 @@ def main():
                 print(f"📂 O que o MLflow baixou foi: {os.listdir(local_model_dir)}")
             
             # 3. Avalia a necessidade do Scaler e salva na pasta scaler
-            nome_scaler_s3 = "models/scaler/scaler.pkl"
+            nome_scaler_s3 = f"models/scaler/scaler_{symbol}.pkl"
             modelos_com_scaler = ['lstm', 'gru']
             
             if best_model_type in modelos_com_scaler and os.path.exists(arquivo_scaler_local):

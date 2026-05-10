@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
 
+
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Stock Data API"
     VERSION: str = "1.0.0"

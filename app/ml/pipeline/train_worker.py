@@ -2,13 +2,6 @@ import argparse
 import os
 import numpy as np
 import sys
-import codecs
-
-# [VACINA DO EMOJI] Força o Windows a ignorar caracteres que ele não entende (como o 🏃)
-# sem quebrar o código. Ele substitui por um '?' internamente.
-if sys.platform == 'win32':
-    sys.stdout = codecs.getwriter('cp1252')(sys.stdout.buffer, 'replace')
-    sys.stderr = codecs.getwriter('cp1252')(sys.stderr.buffer, 'replace')
 import joblib
 import mlflow
 import mlflow.xgboost
@@ -23,16 +16,23 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.preprocessing import MinMaxScaler
 
 # Importa a nossa função que conversa com o S3
-from utils_s3 import load_clean_data_from_s3
+from app.ml.pipeline.utils_s3 import load_clean_data_from_s3
 
 def create_sequences(data, seq_length, target_index):
-    """Cria janelas de tempo para a rede neural, apontando para a coluna correta do Target."""
+    """Cria janelas de tempo garantindo que a coluna Target seja excluída das features."""
     X, y = [], []
-    for i in range(len(data) - seq_length - 1):
-        X.append(data[i:(i + seq_length), :])
-        y.append(data[i + seq_length, target_index])
-    return np.array(X), np.array(y)
+    num_features = data.shape[1]
+    
+    # Cria uma lista de índices com todas as colunas, EXCETO o Target
+    feature_indices = [i for i in range(num_features) if i != target_index]
 
+    for i in range(len(data) - seq_length - 1):
+        # O modelo APRENDE apenas olhando as colunas que não são o gabarito
+        X.append(data[i:(i + seq_length), feature_indices])
+        # O gabarito (Target) do dia futuro
+        y.append(data[i + seq_length, target_index])
+        
+    return np.array(X), np.array(y)
 # --- Arquitetura PyTorch (Deep Learning) ---
 class SimpleLSTM(torch.nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -69,7 +69,7 @@ def main():
 
     # 2. Configura o MLflow Local
     mlflow.set_tracking_uri("http://localhost:5000")
-    mlflow.set_experiment(f"predict_{args.symbol}")
+    mlflow.set_experiment(f"predict_{args.symbol}_v2")
 
     with mlflow.start_run(run_name=f"{args.model_type}_run"):
         # Loga as configurações sorteadas pelo Maestro
@@ -85,20 +85,24 @@ def main():
             print(f"Erro ao baixar dados do S3: {e}")
             sys.exit(1)
 
-        # Descobre a posição exata da coluna que queremos prever
         target_col_index = df.columns.get_loc('Target_Log_Return')
         num_features = len(df.columns)
         
-        dataset = np.nan_to_num(df.values) # Segurança contra divisões por zero do Pandas
+        dataset_cru = np.nan_to_num(df.values) 
         
-        # O SEGREDO DE PRODUÇÃO: Cria, treina e SALVA o Scaler
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(dataset)
-        
-        scaler_filename = f"scaler_{args.symbol}.pkl"
-        joblib.dump(scaler, scaler_filename)
-        mlflow.log_artifact(scaler_filename, artifact_path="scaler") # Manda pro MLflow
-        os.remove(scaler_filename) # Limpa o disco local
+        # CORREÇÃO: Aplica e salva o Scaler APENAS se for Rede Neural
+        if args.model_type in ["lstm", "gru"]:
+            scaler = MinMaxScaler()
+            scaled_data = scaler.fit_transform(dataset_cru)
+            
+            scaler_filename = f"scaler_{args.symbol}.pkl"
+            joblib.dump(scaler, scaler_filename)
+            mlflow.log_artifact(scaler_filename, artifact_path="scaler")
+            os.remove(scaler_filename)
+        else:
+            # Se for árvore (XGBoost, LightGBM, RF), mantém os dados intactos
+            # O y será aprendido no seu valor real (ex: 0.01)
+            scaled_data = dataset_cru
 
         # ==========================================
         # FASE 2: PREPARAÇÃO DAS MATRIZES
@@ -165,9 +169,9 @@ def main():
         elif args.model_type in ["lstm", "gru"]:
             # Inicializa a rede correta
             if args.model_type == "lstm":
-                model = SimpleLSTM(input_size=num_features, hidden_size=args.hidden_units)
+                model = SimpleLSTM(input_size=num_features - 1, hidden_size=args.hidden_units)
             else:
-                model = SimpleGRU(input_size=num_features, hidden_size=args.hidden_units)
+                model = SimpleGRU(input_size=num_features - 1, hidden_size=args.hidden_units)
                 
             criterion = torch.nn.MSELoss()
             optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -197,13 +201,19 @@ def main():
         # ==========================================
         # FASE 4: AVALIAÇÃO NO MUNDO REAL (INVERSE TRANSFORM)
         # ==========================================
-        dummy_preds = np.zeros((len(preds_escaladas), num_features))
-        dummy_preds[:, target_col_index] = preds_escaladas
-        preds_reais = scaler.inverse_transform(dummy_preds)[:, target_col_index]
+        if args.model_type in ["lstm", "gru"]:
+            # Redes neurais preveem dados escalonados (0 a 1), precisamos reverter
+            dummy_preds = np.zeros((len(preds_escaladas), num_features))
+            dummy_preds[:, target_col_index] = preds_escaladas
+            preds_reais = scaler.inverse_transform(dummy_preds)[:, target_col_index]
 
-        dummy_y = np.zeros((len(y_test), num_features))
-        dummy_y[:, target_col_index] = y_test
-        y_test_reais = scaler.inverse_transform(dummy_y)[:, target_col_index]
+            dummy_y = np.zeros((len(y_test), num_features))
+            dummy_y[:, target_col_index] = y_test
+            y_test_reais = scaler.inverse_transform(dummy_y)[:, target_col_index]
+        else:
+            # Modelos de Árvore JÁ foram treinados e preveem nos valores reais crus
+            preds_reais = preds_escaladas
+            y_test_reais = y_test
 
         # Calcula as métricas reais
         rmse = np.sqrt(mean_squared_error(y_test_reais, preds_reais))
@@ -216,4 +226,10 @@ def main():
         print(f"Treino concluído! {args.model_type.upper()} -> RMSE Real: {rmse:.5f}")
 
 if __name__ == "__main__":
+    import codecs
+    if sys.platform == 'win32':
+        if hasattr(sys.stdout, 'buffer'):
+            sys.stdout = codecs.getwriter('cp1252')(sys.stdout.buffer, 'replace')
+        if hasattr(sys.stderr, 'buffer'):
+            sys.stderr = codecs.getwriter('cp1252')(sys.stderr.buffer, 'replace')
     main()

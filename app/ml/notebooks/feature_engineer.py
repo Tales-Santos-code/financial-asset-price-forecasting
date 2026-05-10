@@ -66,7 +66,7 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         return df
 
     def transform(self, X) -> pd.DataFrame:
-        print(f"⚙️ Executando Pipeline 100% Pandas (Treinamento: {self.is_training})...")
+        print(f"Executando Pipeline 100% Pandas (Treinamento: {self.is_training})...")
         
         # ==========================================
         # 1. PREPARAÇÃO DA BASE
@@ -199,12 +199,17 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         
         # Drop nulos decorrentes das médias móveis (exceto Target e Date)
         cols_features = [c for c in df.columns if c not in ['Target_Log_Return', 'Date']]
+        print("Valores nulos por coluna antes do dropna:")
+        print(df.isnull().sum())
         df = df.dropna(subset=cols_features)
         
         if self.is_training:
             df = df.dropna(subset=['Target_Log_Return'])
             
-        print("✅ Pipeline concluído! Matriz purificada (Pandas) pronta para ML.")
+        # Fix: replace infinity with 0 to prevent exorbitant values in predictions
+        df = df.replace([np.inf, -np.inf], 0)
+            
+        print("Pipeline concluído! Matriz purificada (Pandas) pronta para ML.")
         return df
     
 if __name__ == "__main__":

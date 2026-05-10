@@ -19,7 +19,7 @@ def historical_cleaning(ticker: str, df_macro: pd.DataFrame = None):
         return
         
     # 2. Pega o pipeline já carregado na memória
-    pipeline, _ = get_model_and_params()
+    pipeline, _, _ = get_model_and_params(ticker)
     pipeline.is_training = False 
     
     # Como o seu pipeline aceita a tupla (history, macro), tentamos passar os dois.
