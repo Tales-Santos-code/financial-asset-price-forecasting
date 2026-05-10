@@ -19,10 +19,10 @@ class Settings(BaseSettings):
     # MLflow
     MLFLOW_TRACKING_URI: str = os.getenv("MLFLOW_TRACKING_URI", "http://54.82.227.100:5000")
 
-    # github
-    GITHUB_TOKEN: str
-    GITHUB_OWNER: str
-    GITHUB_REPO: str
+    # github (Opcionais se não for usar integração direta no Lambda)
+    GITHUB_TOKEN: str | None = None
+    GITHUB_OWNER: str | None = None
+    GITHUB_REPO: str | None = None
 
     # paths (não mais utilizados para carregar modelos de forma hardcoded, os modelos vêm do S3)
     BASE_DIR: Path = BASE_DIR
