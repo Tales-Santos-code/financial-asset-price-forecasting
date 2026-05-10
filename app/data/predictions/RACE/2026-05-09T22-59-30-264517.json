@@ -1,0 +1,41 @@
+{
+    "symbol": "RACE",
+    "timestamp": "2026-05-09T22:59:30.264517",
+    "model_version": "champion",
+    "features_input": {
+        "SP500_Return": 0.6224864893135107,
+        "VIX_Return": 0.3707530590713584,
+        "EURUSD_Return": 0.5699167919789163,
+        "Sentiment_Score": 0.0,
+        "Log_Return": 0.6015185990080141,
+        "Target_Log_Return": NaN,
+        "Lag_1": 0.5908591569072936,
+        "Lag_2": 0.694392997216015,
+        "Lag_3": 0.3992610552192236,
+        "Lag_5": 0.5156198218203507,
+        "Rolling_Std_14": 0.27189594007749074,
+        "Distancia_SMA_20": 0.5045078291288294,
+        "Distancia_SMA_50": 0.5602606556872479,
+        "Bollinger_Width": 0.2519335207126401,
+        "Volume_Shock": 0.1574630382496668,
+        "Month_Sin": 0.75,
+        "Month_Cos": 0.06698729810778065,
+        "Day_Sin": 0.0,
+        "Day_Cos": 0.6180339887498947,
+        "Volume_ROC_5": 0.057860321730001926,
+        "OBV_ROC_5": 0.7110870538593389,
+        "RSI_14": 0.4397157037950468,
+        "MACD_Line": 0.5160557941113239,
+        "MACD_Signal": 0.5604781546093223,
+        "MACD_Histogram": 0.5453175663877289,
+        "ATR_14": 0.49261133909401933,
+        "ATR_Pct": 0.2293406863948973
+    },
+    "prediction_output": {
+        "symbol": "RACE",
+        "current_price": 339.69,
+        "predicted_price_tomorrow": 339.82,
+        "variation_pct": 0.0394,
+        "timestamp": "2026-05-08"
+    }
+}
