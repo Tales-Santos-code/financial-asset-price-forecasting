@@ -25,8 +25,9 @@ BASE_DIR = os.getenv("BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
 def run_trial(cmd):
     """Executa o script do operário garantindo que os logs apareçam no terminal em tempo real."""
     try:
-        # Usamos check_call para que a saída do worker vá direto para o nosso stdout
-        subprocess.check_call(cmd)
+        # Passamos as variáveis de ambiente atuais (incluindo AWS keys) para o worker
+        env = os.environ.copy()
+        subprocess.check_call(cmd, env=env)
         sys.stdout.flush()
         return True
     except subprocess.CalledProcessError as e:
@@ -145,8 +146,8 @@ def main():
     _BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "financial-asset-price-forecasting-495599733085-us-east-1-an")
 
     for symbol in symbols:
-        # 🔥 Acha o experimento correto (versão 2)
-        experiment_name = f"predict_{symbol}_v2"
+        # 🔥 Acha o experimento correto (versão 3)
+        experiment_name = f"predict_{symbol}_v3"
         experiment = client.get_experiment_by_name(experiment_name)
         
         if args.verbose:
