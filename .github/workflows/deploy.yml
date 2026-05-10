@@ -90,9 +90,9 @@ jobs:
             AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},
             AWS_REGION=us-east-1,
             S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an,
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }},
-            GITHUB_OWNER=${{ secrets.GITHUB_OWNER }},
-            GITHUB_REPO=${{ secrets.GITHUB_REPO }},
+            # GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }},
+            # GITHUB_OWNER=${{ secrets.GITHUB_OWNER }},
+            # GITHUB_REPO=${{ secrets.GITHUB_REPO }},
             MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}
           }"
 
