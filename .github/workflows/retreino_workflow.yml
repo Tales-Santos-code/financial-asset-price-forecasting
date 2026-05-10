@@ -61,7 +61,9 @@ jobs:
             fi
             
             cd financial-asset-price-forecasting
-            echo "Atualizando o código..."
+            echo "Limpando arquivos temporários e forçando atualização..."
+            git checkout .
+            git clean -fd
             git pull origin main
             
             # garante que o docker vai subir com a configuração mais recente
@@ -79,11 +81,11 @@ jobs:
             echo "Configurando dependências do Python..."
             python3 -m venv venv
             source venv/bin/activate
-            pip install -r app/ml/requirements-ml.txt
+            pip install -r app/ml/server/requirements-ml.txt
             
             # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos
             echo "Iniciando o retreino para: ${{ github.event.inputs.symbol }}"
-            python app/ml/pipeline/random_search.py --symbol ${{ github.event.inputs.symbol }}
+            python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }}
             
             # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
             sudo shutdown -c
