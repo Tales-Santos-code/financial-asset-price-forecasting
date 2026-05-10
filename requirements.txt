@@ -11,3 +11,4 @@ evidently
 pydantic_settings
 huggingface_hub
 lightgbm
+torch --index-url https://download.pytorch.org/whl/cpu
