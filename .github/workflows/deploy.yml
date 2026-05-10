@@ -82,17 +82,12 @@ jobs:
         echo "Aguardando atualização do código..."
         aws lambda wait function-updated --function-name $LAMBDA_NAME
 
-        # 3. Atualiza as Variáveis de Ambiente (Sincroniza segredos do GitHub para o Lambda)
+        # 3. Atualiza as Variáveis de Ambiente (Apenas o necessário, sem chaves AWS)
         aws lambda update-function-configuration \
           --function-name $LAMBDA_NAME \
           --environment "Variables={
-            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }},
-            AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},
             AWS_REGION=us-east-1,
             S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an,
-            # GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }},
-            # GITHUB_OWNER=${{ secrets.GITHUB_OWNER }},
-            # GITHUB_REPO=${{ secrets.GITHUB_REPO }},
             MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}
           }"
 
