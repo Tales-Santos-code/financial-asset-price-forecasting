@@ -10,6 +10,7 @@ import pandas as pd
 logger = setup_logger(__name__)
 router = APIRouter()
 
+
 # Endpoint GET padronizado usando os Schemas
 @router.get("/stock-data-prediction", response_model=PredictionResponse)
 def predict_stock(
@@ -17,26 +18,26 @@ def predict_stock(
     symbol: str = Query("RACE", description="Ticker da ação (ex: RACE, AAPL, NVDA)"),
 ):
     # 2. Padroniza para maiúsculo (evita erro se o usuário digitar 'race' ou 'aapl' minúsculo)
-    ticker = symbol.upper()
+    ticker = symbol.upper().strip()
     
     # 3. Extrai a lista de valores permitidos dinamicamente do seu Enum
     tickers_permitidos = [item.value for item in StockSymbol]
     
     # 4. A barreira do "Porteiro": Rejeita com erro 400 amigável antes de gastar recursos
     if ticker not in tickers_permitidos:
-        logger.warning(f"🚫 Requisição negada: Ticker '{ticker}' não autorizado.")
+        logger.warning(f"[REJEITADO] Requisição negada: Ticker '{ticker}' não autorizado.")
         raise HTTPException(
             status_code=400, 
             detail=f"O ticker '{ticker}' não é suportado. Tickers permitidos: {', '.join(tickers_permitidos)}."
         )
-        
+    
     try:
         finance_api = FinanceService(ticker=ticker)
         bucket = settings.S3_BUCKET_NAME
         historico_key = f"data/historical/{ticker}_master_history.csv"
         
         # 1. Busca Dados Crus da Ação
-        logger.info(f"📥 Buscando histórico para {ticker} ...")
+        logger.info(f"[DOWNLOAD] Buscando histórico para {ticker} ...")
 
         df_novos = finance_api.get_historical_data(full=True, use_checkpoint=True)
         df_history = pd.DataFrame()
@@ -68,7 +69,7 @@ def predict_stock(
 
             # Sobrescreve o arquivo Master no S3
             write_csv_to_s3(bucket, historico_key, df_to_save)
-            logger.info(f"✅ Histórico master consolidado no S3. Total de linhas: {len(df_history)}.")
+            logger.info(f"[OK] Histórico master consolidado no S3. Total de linhas: {len(df_history)}.")
 
 
         if df_history.empty: 
@@ -102,5 +103,5 @@ def predict_stock(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         # Erros inesperados (ex: Yahoo Finance fora do ar)
-        logger.error(f"Erro Interno no Servidor: {str(e)}")
-        raise HTTPException(status_code=500, detail="Ocorreu um erro ao processar a predição.")
+        logger.error(f"Erro no processamento da predição: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro ao processar a predição: {str(e)}")

@@ -1,7 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
+from pathlib import Path
 
-
+# Define a raiz do projeto para fallback e arquivos temporários (se necessário)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Stock Data API"
@@ -13,18 +15,19 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str = "financial-asset-price-forecasting-495599733085-us-east-1-an"
+    
     # MLflow
     MLFLOW_TRACKING_URI: str = os.getenv("MLFLOW_TRACKING_URI", "http://54.82.227.100:5000")
 
-    #github
+    # github
     GITHUB_TOKEN: str
     GITHUB_OWNER: str
     GITHUB_REPO: str
 
-    #paths
-    BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    PIPELINE_PATH: str = os.getenv("PIPELINE_PATH", f"{BASE_DIR}\\models\\pipeline_limpeza_V2.pkl")
-    MODEL_PATH: str = os.getenv("MODEL_PATH", f"{BASE_DIR}\\models\\champions\\melhor_modelo.pkl")
+    # paths (não mais utilizados para carregar modelos de forma hardcoded, os modelos vêm do S3)
+    BASE_DIR: Path = BASE_DIR
+    PIPELINE_PATH: str = os.getenv("PIPELINE_PATH", str(BASE_DIR / "models" / "pipeline_limpeza_V2.pkl"))
+    MODEL_PATH: str = os.getenv("MODEL_PATH", str(BASE_DIR / "models" / "champions" / "melhor_modelo.pkl"))
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

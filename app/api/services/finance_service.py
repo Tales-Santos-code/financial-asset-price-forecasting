@@ -5,6 +5,7 @@ from app.api.core.logger import setup_logger
 
 # Importamos as funções que você já criou no s3.py
 from app.api.services.s3 import read_json_from_s3, write_json_to_s3
+
 logger = setup_logger("finance_service")
 
 class FinanceService:
