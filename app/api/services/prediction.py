@@ -3,23 +3,20 @@ import tempfile
 import joblib
 import numpy as np
 import pandas as pd
-import uuid
 import torch
 import xgboost as xgb
+import io
+from concurrent.futures import ThreadPoolExecutor
 
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
 from app.api.services.monitoring import save_prediction_log
 from app.api.core.aws import get_s3_client
-from app.api.services.s3 import read_csv_from_s3, write_csv_to_s3
 
 logger = setup_logger(__name__)
 
 # Cache em memória para os modelos (Singleton)
 _model_cache = {}
-
-import io
-from concurrent.futures import ThreadPoolExecutor
 
 def _load_from_s3_to_memory(s3_key: str):
     """
@@ -39,7 +36,8 @@ def _smart_load(buffer: bytes):
     """
     Detecta formato e carrega o objeto a partir do buffer de bytes.
     """
-    if buffer is None: return None
+    if buffer is None:
+        return None
     
     # Check Magic Number (PK for Zip/PyTorch)
     if buffer.startswith(b"PK"):
@@ -57,7 +55,8 @@ def _smart_load(buffer: bytes):
             model.load_model(tmp_path)
             return model
         finally:
-            if os.path.exists(tmp_path): os.remove(tmp_path)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 def get_model_and_params(symbol: str):
     cache_key = f"{symbol}_model" 
@@ -129,8 +128,10 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
 
     # Predição
     n_expected = getattr(model, "n_features_in_", X_full.shape[1])
-    if hasattr(model, "num_feature"): n_expected = model.num_feature()
-    if hasattr(model, "num_features"): n_expected = model.num_features
+    if hasattr(model, "num_feature"):
+        n_expected = model.num_feature()
+    if hasattr(model, "num_features"):
+        n_expected = model.num_features
     
     X_features = X_full.drop(columns=['Target_Log_Return']) if 'Target_Log_Return' in X_full.columns else X_full
     log_return_previsto_scaled = _model_predict(model, X_features, n_expected)
