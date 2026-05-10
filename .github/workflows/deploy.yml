@@ -82,14 +82,10 @@ jobs:
         echo "Aguardando atualização do código..."
         aws lambda wait function-updated --function-name $LAMBDA_NAME
 
-        # 3. Atualiza as Variáveis de Ambiente (Apenas o necessário, sem chaves AWS)
+        # 3. Atualiza as Variáveis de Ambiente (Garante que chaves antigas sumam)
         aws lambda update-function-configuration \
           --function-name $LAMBDA_NAME \
-          --environment "Variables={
-            AWS_REGION=us-east-1,
-            S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an,
-            MLFLOW_TRACKING_URI=${{ secrets.MLFLOW_TRACKING_URI }}
-          }"
+          --environment "Variables={AWS_REGION=us-east-1,S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an,MLFLOW_TRACKING_URI=\"${{ secrets.MLFLOW_TRACKING_URI || 'http://54.82.227.100:5000' }}\"}"
 
   # # ==========================================
   # # JOB 3: ATUALIZAÇÃO DO SERVIDOR MLFLOW (AWS EC2) ONLY FIRST DEPLOYMENT

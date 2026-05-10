@@ -26,12 +26,11 @@ def get_aws_session() -> boto3.Session:
             session_kwargs["aws_access_key_id"] = access_key
             session_kwargs["aws_secret_access_key"] = secret_key
         elif is_lambda:
-            # Em Produção (Lambda): Ignoramos chaves estáticas e forçamos o uso da Role
-            logger.info("Ambiente Lambda detectado. Limpando variáveis de ambiente residuais para forçar IAM Role.")
-            # Removemos do os.environ para que o Boto3 não as encontre de jeito nenhum
-            os.environ.pop("AWS_ACCESS_KEY_ID", None)
-            os.environ.pop("AWS_SECRET_ACCESS_KEY", None)
-            os.environ.pop("AWS_SESSION_TOKEN", None)
+            # Em Produção (Lambda): Confiamos no ambiente, mas avisamos se houver chaves estáticas
+            ak = os.environ.get("AWS_ACCESS_KEY_ID", "")
+            if ak.startswith("AKIA"):
+                logger.warning(f"Atenção: Chave estática AKIA detectada no Lambda ({ak[:4]}...). Isso pode causar erro se for inválida.")
+            logger.info("Ambiente Lambda detectado. Usando credenciais do ambiente (IAM Role).")
         else:
             logger.info("Nenhuma credencial estática encontrada. Usando Default Provider Chain.")
 
