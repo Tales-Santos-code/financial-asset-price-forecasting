@@ -19,14 +19,21 @@ def get_aws_session() -> boto3.Session:
 
         session_kwargs = {"region_name": settings.AWS_REGION}
         
-        if access_key and secret_key:
-            # Se as chaves estiverem presentes (Local Dev ou configuradas explicitamente)
+        if access_key and secret_key and not is_lambda:
+            # Local Dev: usamos as chaves do .env
             masked_key = f"{access_key[:4]}...{access_key[-4:]}" if len(access_key) > 8 else "****"
-            logger.info(f"Usando credenciais estáticas. Key ID: {masked_key}")
+            logger.info(f"Local Dev detectado. Usando credenciais estáticas: {masked_key}")
             session_kwargs["aws_access_key_id"] = access_key
             session_kwargs["aws_secret_access_key"] = secret_key
+        elif is_lambda:
+            # Em Produção (Lambda): Ignoramos chaves estáticas e forçamos o uso da Role
+            logger.info("Ambiente Lambda detectado. Limpando variáveis de ambiente residuais para forçar IAM Role.")
+            # Removemos do os.environ para que o Boto3 não as encontre de jeito nenhum
+            os.environ.pop("AWS_ACCESS_KEY_ID", None)
+            os.environ.pop("AWS_SECRET_ACCESS_KEY", None)
+            os.environ.pop("AWS_SESSION_TOKEN", None)
         else:
-            logger.info(f"Credenciais estáticas não detectadas. Ambiente Lambda: {is_lambda}. Usando IAM Role.")
+            logger.info("Nenhuma credencial estática encontrada. Usando Default Provider Chain.")
 
         session = boto3.Session(**session_kwargs)
         logger.info(f"Sessão AWS inicializada. Provider: {session.get_credentials().method if session.get_credentials() else 'None'}")
