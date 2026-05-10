@@ -10,11 +10,18 @@ def get_aws_session() -> boto3.Session:
     credenciais seguras carregadas do .env (via Pydantic Settings).
     """
     try:
-        session = boto3.Session(
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_REGION
-        )
+        # Se as chaves estiverem presentes (Local Dev), usamos elas.
+        # Se não, deixamos o boto3 buscar automaticamente (IAM Role no Lambda).
+        session_kwargs = {"region_name": settings.AWS_REGION}
+        
+        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+            session_kwargs["aws_access_key_id"] = settings.AWS_ACCESS_KEY_ID
+            session_kwargs["aws_secret_access_key"] = settings.AWS_SECRET_ACCESS_KEY
+            logger.info("Usando credenciais estáticas da AWS.")
+        else:
+            logger.info("Credenciais não fornecidas. Usando IAM Role/Default Provider Chain.")
+
+        session = boto3.Session(**session_kwargs)
         logger.info("Sessão AWS criada com sucesso.")
         return session 
     except Exception as e:

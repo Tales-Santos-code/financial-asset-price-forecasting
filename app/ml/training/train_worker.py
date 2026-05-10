@@ -20,8 +20,10 @@ if sys.platform == 'win32':
     sys.stderr = codecs.getwriter('cp1252')(sys.stderr.buffer, 'replace')
 # Garante que o MLflow e outras libs vejam as credenciais da AWS
 from app.api.core.config import settings
-os.environ["AWS_ACCESS_KEY_ID"] = settings.AWS_ACCESS_KEY_ID
-os.environ["AWS_SECRET_ACCESS_KEY"] = settings.AWS_SECRET_ACCESS_KEY
+if settings.AWS_ACCESS_KEY_ID:
+    os.environ["AWS_ACCESS_KEY_ID"] = settings.AWS_ACCESS_KEY_ID
+if settings.AWS_SECRET_ACCESS_KEY:
+    os.environ["AWS_SECRET_ACCESS_KEY"] = settings.AWS_SECRET_ACCESS_KEY
 os.environ["AWS_DEFAULT_REGION"] = settings.AWS_REGION
 
 import joblib

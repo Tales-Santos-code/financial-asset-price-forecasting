@@ -8,8 +8,10 @@ from mlflow import artifacts
 
 # Garante que o MLflow veja as credenciais da AWS para baixar artefatos do S3
 from app.api.core.config import settings
-os.environ["AWS_ACCESS_KEY_ID"] = settings.AWS_ACCESS_KEY_ID
-os.environ["AWS_SECRET_ACCESS_KEY"] = settings.AWS_SECRET_ACCESS_KEY
+if settings.AWS_ACCESS_KEY_ID:
+    os.environ["AWS_ACCESS_KEY_ID"] = settings.AWS_ACCESS_KEY_ID
+if settings.AWS_SECRET_ACCESS_KEY:
+    os.environ["AWS_SECRET_ACCESS_KEY"] = settings.AWS_SECRET_ACCESS_KEY
 os.environ["AWS_DEFAULT_REGION"] = settings.AWS_REGION
 
 # Importando as funções do seu utilitário S3 (incluindo a nova função de faxina)

@@ -10,9 +10,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_PREFIX: str = ""
     
-    # AWS
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
+    # AWS (Opcionais se rodando com IAM Role no Lambda/EC2)
+    AWS_ACCESS_KEY_ID: str | None = None
+    AWS_SECRET_ACCESS_KEY: str | None = None
     AWS_REGION: str = "us-east-1"
     S3_BUCKET_NAME: str = "financial-asset-price-forecasting-495599733085-us-east-1-an"
     
