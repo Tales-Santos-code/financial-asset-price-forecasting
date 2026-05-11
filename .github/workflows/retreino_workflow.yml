@@ -49,6 +49,7 @@ jobs:
           # Injeta as variáveis do GitHub para dentro do terminal SSH da EC2
           envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,MLFLOW_TRACKING_URI,TARGET_SYMBOL
           timeout: 240m # Dá um tempo generoso para o treino rodar, evitando timeouts prematuros
+          command_timeout: 400m
           script: |
             # 🚨 O BOTÃO DO HOMEM MORTO: Agenda o desligamento da máquina para daqui a 240 min.
             # Se a máquina travar por falta de RAM, ela vai se auto-desligar!
