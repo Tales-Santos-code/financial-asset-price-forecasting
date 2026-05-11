@@ -42,6 +42,3 @@ def get_s3_client():
     session = get_aws_session()
     _s3_client_cache = session.client("s3")
     return _s3_client_cache
-
-# Se no futuro você precisar de outro serviço, é só adicionar aqui:
-# def get_dynamodb_client(): ...

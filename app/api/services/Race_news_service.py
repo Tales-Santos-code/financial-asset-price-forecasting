@@ -141,7 +141,7 @@ def gerar_base_sentimento(ticker="RACE", dias_passado=30):
     if df_antigo is not None and not df_antigo.empty:
         print("🔄 Mesclando novas notícias com o histórico do S3...")
         df_consolidado = pd.concat([df_antigo, df_diario_novo])
-        # Garante que não teremos duas médias para o mesmo dia
+        # Garante que não tera duas médias para o mesmo dia
         df_consolidado = df_consolidado.drop_duplicates(subset=['Date'], keep='last')
         df_consolidado = df_consolidado.sort_values(by='Date')
     else:

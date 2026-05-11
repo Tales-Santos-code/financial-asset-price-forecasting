@@ -7,7 +7,7 @@ import os
 from unittest.mock import patch
 
 # ==========================================
-# HACK DE DIRETÓRIO PARA O PYTEST
+# DIRETÓRIO PARA O PYTEST
 # ==========================================
 # Adiciona a pasta exata onde os scripts de ML estão ao "radar" do Python.
 caminho_ml = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../app/ml/training'))

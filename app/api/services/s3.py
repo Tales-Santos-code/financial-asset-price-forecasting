@@ -8,12 +8,12 @@ if TYPE_CHECKING:
 
 from app.api.core.logger import setup_logger
 
-# Importamos o client do nosso novo core centralizado!
+# Importa o client do core centralizado
 from app.api.core.aws import get_s3_client
 
 logger = setup_logger("s3_service")
 
-# Inicializamos o client aqui fora (Singleton) para reaproveitamento
+# Inicializa o client aqui fora (Singleton) 
 s3_client = get_s3_client()
 
 def read_json_from_s3(bucket: str, key: str) -> dict:

@@ -39,7 +39,6 @@ def _smart_load(buffer: bytes):
     if buffer is None:
         return None
     
-    # Check Magic Number (PK for Zip/PyTorch)
     if buffer.startswith(b"PK"):
         return torch.load(io.BytesIO(buffer), map_location="cpu", weights_only=False)
     

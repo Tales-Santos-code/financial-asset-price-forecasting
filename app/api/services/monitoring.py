@@ -8,7 +8,6 @@ import json
 
 from app.api.services.s3 import write_json_to_s3
 
-# Ajustado para usar o setup_logger do seu core
 logger = setup_logger("monitoring_service")
 
 def save_prediction_log(symbol: str, features_utilizadas: pd.DataFrame, prediction_result: dict) -> None:
@@ -58,5 +57,3 @@ def save_prediction_log(symbol: str, features_utilizadas: pd.DataFrame, predicti
         
     except Exception as e:
         logger.error(f"Falha ao salvar log de monitoramento no S3: {e}", exc_info=True)
-        # O erro é engolido aqui propositalmente. 
-        # Se o S3 falhar, o usuário ainda deve receber a cotação na API.

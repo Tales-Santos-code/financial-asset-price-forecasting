@@ -15,16 +15,14 @@ if settings.AWS_SECRET_ACCESS_KEY:
     os.environ["AWS_SECRET_ACCESS_KEY"] = settings.AWS_SECRET_ACCESS_KEY
 os.environ["AWS_DEFAULT_REGION"] = settings.AWS_REGION
 
-# Importando as funções do seu utilitário S3 (incluindo a nova função de faxina)
 from app.ml.utils.utils_s3 import upload_champion_to_s3
 
-# Tenta pegar do .env. Se não achar, usa a pasta atual de onde o script está rodando
 BASE_DIR = os.getenv("BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
 
 def run_trial(cmd):
     """Executa o script do operário garantindo que os logs apareçam no terminal em tempo real."""
     try:
-        # Passamos as variáveis de ambiente atuais (incluindo AWS keys) para o worker
+        # Passa as variáveis de ambiente atuais para o worker
         env = os.environ.copy()
         subprocess.check_call(cmd, env=env)
         sys.stdout.flush()
@@ -52,7 +50,6 @@ def main():
     if args.verbose:
         print(f"Modo verboso ativado. Processando símbolos: {symbols}")
 
-    # ... (rest of search_spaces)
     search_spaces = {
         "xgboost": {
             "learning_rate": [0.1, 0.05, 0.01],
@@ -86,7 +83,7 @@ def main():
         }
     }
 
-    N_TRIALS = 5  # Vai rodar N sorteios no total por Ação
+    N_TRIALS = 5  # Vai rodar N vezes por Ação
     script_path = os.path.join(os.path.dirname(__file__), "train_worker.py")
 
     # ==========================================
@@ -133,18 +130,15 @@ def main():
     # 2. BUSCA DO CAMPEÃO E DEPLOY PARA O S3
     # ==========================================
     print("\n🏆 Buscando o Grande Campeão no MLflow...")
-    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
-    # Criamos uma pasta temporária segura no Windows para os downloads
     temp_download_dir = os.path.join(BASE_DIR, "temp_artifacts")
     os.makedirs(temp_download_dir, exist_ok=True)
     
-    # Coleta o nome do bucket do ambiente ou define fixo
     _BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "financial-asset-price-forecasting-495599733085-us-east-1-an")
 
     for symbol in symbols:
-        # 🔥 Acha o experimento correto (versão 3)
+        #Acha o experimento correto (versão 3)
         experiment_name = f"predict_{symbol}_v3"
         experiment = client.get_experiment_by_name(experiment_name)
         
@@ -167,7 +161,6 @@ def main():
         
         if runs:
             best_run = runs[0]
-            # best_rmse = best_run.data.metrics.get('rmse', 'N/A')
             best_model_type = best_run.data.params.get('model_type', 'N/A')
             run_id = best_run.info.run_id
 
@@ -175,7 +168,6 @@ def main():
             # Pega o valor bruto
             raw_rmse = best_run.data.metrics.get('rmse', 'N/A')
             
-            # Formata bonito apenas se for um número, senão exibe como texto normal
             if isinstance(raw_rmse, (int, float)):
                 rmse_formatado = f"{raw_rmse:.5f}"
             else:
@@ -208,7 +200,7 @@ def main():
             # LÓGICA DE SOBRESCRITA E FAXINA S3 (COM PASTAS)
             # ==========================================
             
-            # 1. Busca inteligente do arquivo físico do modelo na pasta do MLflow
+            # 1. Busca do arquivo físico do modelo na pasta do MLflow
             arquivo_modelo_real = None
             for root, dirs, files in os.walk(local_model_dir):
                 for file in files:
@@ -220,7 +212,7 @@ def main():
                 if arquivo_modelo_real:
                     break
 
-            # 2. Upload do Modelo Principal (Sempre com nome fixo!)
+            # 2. Upload do Modelo Principal
             nome_modelo_s3 = f"models/champion/modelo_{symbol}.pkl"
             
             if arquivo_modelo_real and os.path.exists(arquivo_modelo_real):
@@ -232,10 +224,8 @@ def main():
                 if args.verbose:
                     print(f"📂 O que o MLflow baixou foi: {os.listdir(local_model_dir)}")
             
-            # 3. Avalia a necessidade do Scaler e salva na pasta scaler
             nome_scaler_s3 = f"models/scaler/scaler_{symbol}.pkl"
             
-            # O Scaler deve ser sempre salvo pois a variavel target foi escalada no treinamento
             if os.path.exists(arquivo_scaler_local):
                 print(f"☁️ Sobrescrevendo o Scaler no S3: {nome_scaler_s3}")
                 upload_champion_to_s3(arquivo_scaler_local, nome_scaler_s3)

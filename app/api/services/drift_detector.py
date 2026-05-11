@@ -2,14 +2,10 @@ import os
 import pandas as pd
 import requests 
 
-# ==========================================
-# S3 E CORE
-# ==========================================
-
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
 
-# Importamos todos os conectores necessários do S3
+# Importa todos os conectores necessários do S3
 from app.api.services.s3 import write_html_to_s3, read_json_from_s3, read_csv_from_s3
 from app.api.core.aws import get_s3_client
 logger = setup_logger("drift_detector")
@@ -61,7 +57,7 @@ def load_production_logs(symbol: str) -> pd.DataFrame:
     
     records = []
     try:
-        # Lista os objetos e ordena por data (mais recentes primeiro)
+        # Lista os objetos e ordena por data
         response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
         
         if 'Contents' not in response:
@@ -71,7 +67,7 @@ def load_production_logs(symbol: str) -> pd.DataFrame:
         # Ordena por LastModified decrescente
         sorted_contents = sorted(response['Contents'], key=lambda x: x['LastModified'], reverse=True)
         
-        # Limitamos a leitura aos últimos 100 logs para evitar timeout na Lambda
+        # Limita a leitura aos últimos 100 logs para evitar timeout na Lambda
         LIMIT = 100
         count = 0
         
@@ -92,7 +88,6 @@ def load_production_logs(symbol: str) -> pd.DataFrame:
 
 def check_data_drift(symbol: str) -> bool:
     """
-    Pipeline Cloud Native: 
     1. Lê dados históricos do S3 (Referência)
     2. Lê logs de predição do S3 (Current)
     3. Gera relatório de Drift em memória (Evidently 0.7+)
@@ -119,7 +114,7 @@ def check_data_drift(symbol: str) -> bool:
         logger.info(f"Sem volume de dados suficiente em produção para {symbol} (Encontrado: {len(current_data)} logs).")
         return False
 
-    # Removemos colunas que não são features (Target, Date e colunas de índice do pandas)
+    # Remove colunas que não são features (Target, Date e colunas de índice do pandas)
     features_para_analisar = [
         c for c in reference_data.columns 
         if c not in ['Target_Log_Return', 'Date'] and not c.startswith('Unnamed')
@@ -127,7 +122,7 @@ def check_data_drift(symbol: str) -> bool:
     
     for col in features_para_analisar:
         if col not in current_data.columns:
-            # Preenchemos com a média da referência para evitar o 'RuntimeWarning' de divisão por zero do NumPy
+            # Preenche com a média da referência para evitar o 'RuntimeWarning' de divisão por zero do NumPy
             current_data[col] = reference_data[col].mean() if not reference_data[col].empty else 0.0
 
     # ==========================================
@@ -167,7 +162,6 @@ def check_data_drift(symbol: str) -> bool:
         
         dataset_drift = False 
         
-        # No Evidently 0.7+, os resultados estão no Snapshot.dict()
         # O Dataset Drift global é calculado pela métrica 'DriftedColumnsCount'
         for metric in report_dict.get("metrics", []):
             m_config = metric.get("config", {})

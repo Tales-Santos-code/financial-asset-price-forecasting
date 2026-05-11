@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 import os
 from pathlib import Path
 
-# Define a raiz do projeto para fallback e arquivos temporários (se necessário)
+# Define a raiz do projeto
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 class Settings(BaseSettings):
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     GITHUB_OWNER: str | None = None
     GITHUB_REPO: str | None = None
 
-    # paths (não mais utilizados para carregar modelos de forma hardcoded, os modelos vêm do S3)
+    # paths
     BASE_DIR: Path = BASE_DIR
     PIPELINE_PATH: str = os.getenv("PIPELINE_PATH", str(BASE_DIR / "models" / "pipeline_limpeza_V2.pkl"))
     MODEL_PATH: str = os.getenv("MODEL_PATH", str(BASE_DIR / "models" / "champions" / "melhor_modelo.pkl"))

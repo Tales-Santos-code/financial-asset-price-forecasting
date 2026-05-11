@@ -3,7 +3,7 @@ from app.api.core.config import settings
 from app.api.core.logger import setup_logger
 from app.api.services.s3 import read_csv_from_s3, write_csv_to_s3
 
-# Importamos o carregador central para aproveitar o cache da RAM e o download do S3
+# Importa o carregador central para aproveitar o cache da RAM e o download do S3
 from app.api.services.prediction import get_model_and_params
 
 logger = setup_logger("cleaning_service")
@@ -22,7 +22,7 @@ def historical_cleaning(ticker: str, df_macro: pd.DataFrame = None):
     pipeline, _, _ = get_model_and_params(ticker)
     pipeline.is_training = False 
     
-    # Como o seu pipeline aceita a tupla (history, macro), tentamos passar os dois.
+    # Como o pipeline aceita a tupla (history, macro), tentamos passar os dois.
     try:
         if df_macro is not None and not df_macro.empty:
             df_transformado = pipeline.transform((df_history, df_macro))

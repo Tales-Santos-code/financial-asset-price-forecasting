@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Path
 from fastapi.responses import HTMLResponse
 from datetime import datetime
 
-# Importamos o seu Enum para manter a lista de ativos centralizada e única no sistema inteiro
 from app.api.schemas.prediction_schema import StockSymbol 
 from app.api.schemas.monitoring_schema import DriftStatusResponse, ModelHealthResponse
 from app.api.core.config import settings
@@ -13,7 +12,7 @@ from app.api.services.s3 import read_html_from_s3
 logger = setup_logger(__name__)
 router = APIRouter()
 
-# Puxa dinamicamente todos os valores permitidos do seu Enum
+# Puxa dinamicamente todos os valores permitidos do Enum
 ATIVOS_MONITORADOS = [item.value for item in StockSymbol]
 
 @router.get("/health", response_model=ModelHealthResponse)
@@ -31,11 +30,10 @@ def check_model_health():
 def trigger_drift_analysis(
     background_tasks: BackgroundTasks,
     symbol: str = Query("ALL", description="Ticker único (ex: RACE) ou 'ALL'."),
-    run_async: bool = Query(False, description="Se True, executa em background (pode falhar na Lambda).")
+    run_async: bool = Query(False, description="Se True, executa em background.")
 ):
     """
     Força a execução do Evidently AI.
-    No ambiente Lambda, recomenda-se run_async=False para garantir a conclusão.
     """
     ticker = symbol.upper().strip()
     
@@ -72,7 +70,7 @@ def trigger_drift_analysis(
             
             return DriftStatusResponse(
                 status="Concluído" if not run_async else "Processando",
-                dataset_drift_detected=False, # Não sabemos o resultado aqui se for async
+                dataset_drift_detected=False,
                 last_check_timestamp=datetime.utcnow().isoformat(),
                 message=msg
             )

@@ -97,7 +97,7 @@ def main():
     mlflow.set_experiment(f"predict_{args.symbol}_v3")
 
     with mlflow.start_run(run_name=f"{args.model_type}_run"):
-        # Loga as configurações sorteadas pelo Maestro
+        # Loga as configurações sorteadas
         mlflow.log_params(vars(args))
 
         # ==========================================
@@ -117,13 +117,13 @@ def main():
         print(f"DEBUG: Dataset shape before scaling: {df.values.shape}")
         dataset = np.nan_to_num(df.values) # Segurança contra divisões por zero do Pandas
         
-        # O SEGREDO DE PRODUÇÃO: Cria, treina e SALVA o Scaler
+        #Cria, treina e SALVA o Scaler
         scaler = MinMaxScaler()
         scaled_data = scaler.fit_transform(dataset)
         
         scaler_filename = f"scaler_{args.symbol}.pkl"
         joblib.dump(scaler, scaler_filename)
-        mlflow.log_artifact(scaler_filename, artifact_path="scaler") # Manda pro MLflow
+        mlflow.log_artifact(scaler_filename, artifact_path="scaler") 
         os.remove(scaler_filename) # Limpa o disco local
 
         # ==========================================
@@ -148,7 +148,7 @@ def main():
             X_train_flat = X_train.reshape((X_train.shape[0], -1))
             X_test_flat = X_test.reshape((X_test.shape[0], -1))
             
-            # Corrige o valor -1 para o parâmetro max_depth (No sklearn, infinito é None)
+            # Corrige o valor -1 para o parâmetro max_depth 
             depth_param = None if args.max_depth == -1 else args.max_depth
 
             if args.model_type == "xgboost":
@@ -160,7 +160,6 @@ def main():
                 )
                 model.fit(X_train_flat, y_train)
                 preds_escaladas = model.predict(X_test_flat)
-                # CORRIGIDO AQUI 👇
                 mlflow.xgboost.log_model(model, "model")
 
             elif args.model_type == "lightgbm":
@@ -173,7 +172,6 @@ def main():
                 )
                 model.fit(X_train_flat, y_train)
                 preds_escaladas = model.predict(X_test_flat)
-                # CORRIGIDO AQUI 👇
                 mlflow.lightgbm.log_model(model, "model")
 
             elif args.model_type == "random_forest":
@@ -185,7 +183,6 @@ def main():
                 )
                 model.fit(X_train_flat, y_train)
                 preds_escaladas = model.predict(X_test_flat)
-                # CORRIGIDO AQUI 👇
                 mlflow.sklearn.log_model(model, "model")
 
         elif args.model_type in ["lstm", "gru"]:

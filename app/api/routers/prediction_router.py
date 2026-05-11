@@ -45,7 +45,6 @@ def predict_stock(
             f_novos = executor.submit(finance_api.get_historical_data, full=True, use_checkpoint=True)
             f_antigo = executor.submit(read_csv_from_s3, bucket, historico_key)
             
-            # Para ganhar tempo, vamos assumir que o macro quer os últimos 200 dias de hoje
             now = pd.Timestamp.now()
             f_macro = executor.submit(finance_api.get_macro_data, 
                                      min_date=(now - pd.Timedelta(days=200)).strftime('%Y-%m-%d'),
@@ -55,7 +54,7 @@ def predict_stock(
         df_antigo = f_antigo.result()
         df_macro = f_macro.result()
 
-        # Consolidação rápida
+
         df_history = pd.DataFrame()
         if df_antigo is not None and not df_antigo.empty:
             if 'Date' in df_antigo.columns:
@@ -74,7 +73,6 @@ def predict_stock(
             raise ValueError(f"Sem dados para {ticker}")
         
         # OTIMIZAÇÃO: O pipeline só precisa de ~200 dias para calcular médias móveis pesadas (ex: SMA 200)
-        # Enviar 6.000 linhas mata a performance da Lambda.
         df_ml_input = df_history.tail(250).copy()
         
         # Predição final

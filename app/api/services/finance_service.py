@@ -2,15 +2,13 @@ import yfinance as yf
 import pandas as pd
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
-
-# Importamos as funções que você já criou no s3.py
 from app.api.services.s3 import read_json_from_s3, write_json_to_s3
 
 logger = setup_logger("finance_service")
 
 class FinanceService:
     def __init__(self, ticker: str = "RACE", tickers_macro: list = ["^GSPC", "^VIX", "EURUSD=X"]):
-        self.ticker_symbol = ticker # Armazenamos a string para usar no nome do arquivo no S3
+        self.ticker_symbol = ticker 
         self.stock_historical = yf.Ticker(ticker)
         self.ticker_macro = tickers_macro
 
@@ -37,7 +35,7 @@ class FinanceService:
             else:
                 logger.info("Nenhum ponteiro encontrado no S3. Iniciando carga total (max).")
 
-        # 2. Chama a API do Yahoo Finance com a inteligência aplicada
+        # 2. Chama a API do Yahoo Finance
         if start_date:
             df_financial = self.stock_historical.history(
                 start=start_date, 
@@ -62,7 +60,7 @@ class FinanceService:
         df_financial.index = pd.to_datetime(df_financial.index).tz_localize(None)
 
         if use_checkpoint:
-            # Pega a data mais recente do lote que acabamos de baixar
+            # Pega a data mais recente do lote que acabou de baixar
             new_last_date = df_financial.index.max().strftime("%Y-%m-%d")
             
             # Salva o novo ponteiro no S3

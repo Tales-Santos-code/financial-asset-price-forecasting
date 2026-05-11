@@ -17,10 +17,10 @@ class ModelHealthResponse(BaseModel):
 # 1. ENUMS (Validação Restrita)
 # ==========================================
 class TriggerDriftCheck(str, Enum):
-    RACE = "RACE"          # Ferrari (Nosso alvo principal)
+    RACE = "RACE"          # Ferrari 
     AAPL = "AAPL"          # Apple
     NVDA = "NVDA"          # Nvidia
     VALE3 = "VALE3.SA"     # Vale
     ITSA4 = "ITSA4.SA"     # Itaúsa
     WEGE3 = "WEGE3.SA"     # WEG
-    GSPC = "^GSPC"         # S&P 500 (Para testes macro)
+    GSPC = "^GSPC"         # S&P 500
