@@ -1,6 +1,5 @@
 import json
 import io
-import pandas as pd
 from app.api.core.logger import setup_logger
 
 # Importamos o client do nosso novo core centralizado!
@@ -41,6 +40,7 @@ def write_json_to_s3(bucket: str, key: str, data: dict) -> None:
 def read_csv_from_s3(bucket: str, key: str) -> pd.DataFrame:
     logger.info(f"Attempting to read CSV from s3://{bucket}/{key}")
     try:
+        import pandas as pd
         obj = s3_client.get_object(Bucket=bucket, Key=key)
         df = pd.read_csv(io.BytesIO(obj["Body"].read()))
         logger.info(f"Successfully read CSV from s3://{bucket}/{key} (rows: {len(df)})")
@@ -55,6 +55,7 @@ def read_csv_from_s3(bucket: str, key: str) -> pd.DataFrame:
 def write_csv_to_s3(bucket: str, key: str, df: pd.DataFrame, mode: str = "w") -> None:
     logger.info(f"Writing CSV to s3://{bucket}/{key} (mode={mode})")
     try:
+        import pandas as pd
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
         s3_client.put_object(Bucket=bucket, Key=key, Body=csv_buffer.getvalue().encode("utf-8"))

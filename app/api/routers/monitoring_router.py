@@ -30,20 +30,15 @@ def check_model_health():
 @router.post("/trigger-drift-check", response_model=DriftStatusResponse)
 def trigger_drift_analysis(
     background_tasks: BackgroundTasks,
-    symbol: str = Query("ALL", description="Ticker único (ex: RACE) ou 'ALL'. Listas não são permitidas.")
+    symbol: str = Query("ALL", description="Ticker único (ex: RACE) ou 'ALL'."),
+    run_async: bool = Query(False, description="Se True, executa em background (pode falhar na Lambda).")
 ):
     """
     Força a execução do Evidently AI.
-    Se 'ALL' for passado, processa todos os ativos da carteira em paralelo.
+    No ambiente Lambda, recomenda-se run_async=False para garantir a conclusão.
     """
-    # .strip() remove espaços em branco acidentais antes ou depois da string
     ticker = symbol.upper().strip()
     
-    # ==========================================
-    # VALIDAÇÃO DO PORTEIRO (Barra listas e tickers inválidos)
-    # ==========================================
-    # Se a pessoa mandar "RACE,AAPL", essa string não será "ALL" e não estará dentro de ATIVOS_MONITORADOS. 
-    # Logo, será barrada aqui mesmo!
     if ticker != "ALL" and ticker not in ATIVOS_MONITORADOS:
         logger.warning(f"🚫 Gatilho negado: Ticker ou formato '{ticker}' não autorizado.")
         raise HTTPException(
@@ -54,34 +49,32 @@ def trigger_drift_analysis(
     try:
         if ticker == "ALL":
             logger.info("🔄 Solicitação de análise de Drift em LOTE (ALL) recebida.")
-            
-            # Dispara uma task em background separada para cada ativo
             for ativo in ATIVOS_MONITORADOS:
-                # Ignora o ^GSPC (S&P 500) do Drift Check em lote, já que ele é só contexto macro, não o alvo
                 if ativo != "^GSPC":
                     background_tasks.add_task(check_data_drift, ativo)
-            
-            # Subtraindo 1 por causa do ^GSPC que ignoramos
-            qtd_ativos = len(ATIVOS_MONITORADOS) - 1 
             
             return DriftStatusResponse(
                 status="Processando Lote",
                 dataset_drift_detected=False,
                 last_check_timestamp=datetime.utcnow().isoformat(),
-                message=f"Análise em background iniciada para {qtd_ativos} ativos simultaneamente."
+                message=f"Análise em background iniciada para {len(ATIVOS_MONITORADOS)-1} ativos."
             )
             
         else:
-            logger.info(f"🔍 Solicitação de análise individual recebida para {ticker}.")
-            
-            # Roda apenas o ticker específico solicitado
-            background_tasks.add_task(check_data_drift, ticker)
+            if run_async:
+                logger.info(f"🔍 [ASYNC] Iniciando análise para {ticker} via BackgroundTask.")
+                background_tasks.add_task(check_data_drift, ticker)
+                msg = f"Análise iniciada em background para {ticker}."
+            else:
+                logger.info(f"🔍 [SYNC] Iniciando análise síncrona para {ticker} (Recomendado para Lambda).")
+                is_drift = check_data_drift(ticker)
+                msg = f"Análise concluída para {ticker}. Drift detectado: {is_drift}"
             
             return DriftStatusResponse(
-                status="Processando Individual",
-                dataset_drift_detected=False,
+                status="Concluído" if not run_async else "Processando",
+                dataset_drift_detected=False, # Não sabemos o resultado aqui se for async
                 last_check_timestamp=datetime.utcnow().isoformat(),
-                message=f"Análise iniciada em background para {ticker}."
+                message=msg
             )
 
     except Exception as e:

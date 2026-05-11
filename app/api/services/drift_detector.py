@@ -4,10 +4,8 @@ import pandas as pd
 import requests 
 
 # ==========================================
-# IMPORTAÇÕES DO EVIDENTLY (v0.4+) E S3
+# S3 E CORE
 # ==========================================
-from evidently import Report
-from evidently.presets import DataDriftPreset
 
 from app.api.core.config import settings
 from app.api.core.logger import setup_logger
@@ -64,23 +62,34 @@ def load_production_logs(symbol: str) -> pd.DataFrame:
     
     records = []
     try:
+        # Lista os objetos e ordena por data (mais recentes primeiro)
         response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
         
         if 'Contents' not in response:
             logger.info("Nenhum log de predição encontrado no S3 para análise.")
             return pd.DataFrame()
             
-        for obj in response['Contents']:
+        # Ordena por LastModified decrescente
+        sorted_contents = sorted(response['Contents'], key=lambda x: x['LastModified'], reverse=True)
+        
+        # Limitamos a leitura aos últimos 100 logs para evitar timeout na Lambda
+        LIMIT = 100
+        count = 0
+        
+        for obj in sorted_contents:
+            if count >= LIMIT:
+                break
+                
             if obj['Key'].endswith('.json'):
                 data = read_json_from_s3(bucket, obj['Key'])
                 if data and "features_input" in data:
                     records.append(data["features_input"])
+                    count += 1
                     
     except Exception as e:
         logger.warning(f"Erro ao buscar logs de produção no S3: {e}")
         
     return pd.DataFrame(records)
-
 
 def check_data_drift(symbol: str) -> bool:
     """
@@ -118,6 +127,13 @@ def check_data_drift(symbol: str) -> bool:
     # ==========================================
     # ARQUITETURA IN-MEMORY PARA AWS (EVIDENTLY V0.7+)
     # ==========================================
+    # Importação tardia (Lazy Import) para evitar cold start pesado em rotas que não usam drift
+    from evidently import Report
+    from evidently.presets import DataDriftPreset
+    
+    # Silencia o joblib warning no Lambda (usa /tmp em vez de shared memory inexistente)
+    os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
+
     drift_report = Report([DataDriftPreset()])
     
     logger.info("⚙️ Calculando distribuições estatísticas nas variáveis...")
