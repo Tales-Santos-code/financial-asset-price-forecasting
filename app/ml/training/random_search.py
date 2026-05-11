@@ -47,7 +47,7 @@ def main():
     if args.symbol:
         symbols = [args.symbol]
     else:
-        # symbols = ["RACE", "NVDA", "AAPL", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "GSPC"]
+        # symbols = ["RACE", "NVDA", "AAPL", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "^GSPC"]
         symbols = ["RACE"]
     
     if args.verbose:
@@ -135,7 +135,7 @@ def main():
     # ==========================================
     print("\n🏆 Buscando o Grande Campeão no MLflow...")
     from app.api.core.config import settings
-    mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
+    # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
     # Criamos uma pasta temporária segura no Windows para os downloads

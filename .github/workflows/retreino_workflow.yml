@@ -40,14 +40,17 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           MLFLOW_TRACKING_URI: http://127.0.0.1:5000
+          # Variável segura para o Linux ler (fallback para RACE se vier vazio)
+          TARGET_SYMBOL: ${{ github.event.inputs.symbol || 'RACE' }}
         with:
           host: ${{ steps.get-ip.outputs.ip }}
           username: ubuntu # Usuário padrão da EC2 Ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,MLFLOW_TRACKING_URI
+          # Injeta as variáveis do GitHub para dentro do terminal SSH da EC2
+          envs: AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,MLFLOW_TRACKING_URI,TARGET_SYMBOL
           timeout: 240m # Dá um tempo generoso para o treino rodar, evitando timeouts prematuros
           script: |
-            # 🚨 O BOTÃO DO HOMEM MORTO: Agenda o desligamento da máquina para daqui a 60 min.
+            # 🚨 O BOTÃO DO HOMEM MORTO: Agenda o desligamento da máquina para daqui a 240 min.
             # Se a máquina travar por falta de RAM, ela vai se auto-desligar!
             set -e
 
@@ -67,8 +70,8 @@ jobs:
             git clean -fd -e venv/
             git pull origin main
             
-            # garante que o docker vai subir com a configuração mais recente
-            docker compose -f app/ml/server/docker-compose-ec2.yaml down
+            # Garante que o docker vai subir limpo (a flag -v mata o banco corrompido)
+            docker compose -f app/ml/server/docker-compose-ec2.yaml down -v
 
             # 🐳 Garante que o MLflow (Cartório) está online antes do treino
             echo "Subindo o MLflow via Docker Compose..."
@@ -76,14 +79,24 @@ jobs:
 
             # Dá um tempo para o banco e o servidor MLflow iniciarem completamente
             echo "Aguardando o MLflow ficar online..."
+            MLFLOW_UP=false
             for i in {1..20}; do
               if curl -s -f http://127.0.0.1:5000/ping > /dev/null; then
-                echo "✅ MLflow está online!"
+                echo "✅ MLflow está online e saudável!"
+                MLFLOW_UP=true
                 break
               fi
               echo "⏳ Aguardando MLflow... ($i/20)"
               sleep 10
             done
+            
+            # Trava de segurança: Se o MLflow não subiu, cancela tudo!
+            if [ "$MLFLOW_UP" = false ]; then
+              echo "❌ ERRO CRÍTICO: MLflow não ligou após 200 segundos. Abortando esteira!"
+              docker compose -f app/ml/server/docker-compose-ec2.yaml logs
+              sudo shutdown -c
+              exit 1
+            fi
             
             # 🐍 Configura e ativa o ambiente virtual do Python
             echo "Configurando dependências do Python..."
@@ -94,9 +107,9 @@ jobs:
             pip install --upgrade pip
             pip install --prefer-binary -r app/ml/server/requirements-ml.txt
             
-            # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos
-            echo "Iniciando o retreino para: ${{ github.event.inputs.symbol }}"
-            PYTHONPATH=. PYTHONUNBUFFERED=1 timeout 210m python app/ml/training/random_search.py --symbol ${{ github.event.inputs.symbol }} --verbose
+            # 🚀 O GRANDE MOMENTO: Roda a Fábrica de Experimentos usando o Bash seguro
+            echo "Iniciando o retreino para: $TARGET_SYMBOL"
+            PYTHONPATH=. PYTHONUNBUFFERED=1 timeout 210m python app/ml/training/random_search.py --symbol $TARGET_SYMBOL --verbose
             
             # 🛑 Se o código chegou até aqui, foi um sucesso! Cancela o desligamento programado.
             sudo shutdown -c
@@ -115,9 +128,9 @@ jobs:
             # Limpa o cache pesado de downloads do PIP (PyTorch, etc)
             rm -rf /home/ubuntu/.cache/pip
             
-            # Derruba o container do MLflow adequadamente antes de limpar (opcional, mas recomendado)
+            # Derruba o container do MLflow adequadamente antes de limpar
             cd /home/ubuntu/financial-asset-price-forecasting
-            docker compose -f app/ml/server/docker-compose-ec2.yaml down
+            docker compose -f app/ml/server/docker-compose-ec2.yaml down -v
             
             # Remove todas as imagens, containers e volumes Docker não utilizados
             docker system prune -af --volumes
@@ -125,7 +138,7 @@ jobs:
             echo "Espaço em disco após a limpeza:"
             df -h /
 
-      - name: 5️⃣ Desligar a Máquina EC2 (Economia!)
+      - name: 6️⃣ Desligar a Máquina EC2 (Economia!)
         if: always() # IMPORTANTÍSSIMO: Roda essa etapa MESMO se o passo anterior der erro!
         run: |
           echo "Desligando a EC2 para não gerar custos..."
