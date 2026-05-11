@@ -1,0 +1,41 @@
+{
+    "symbol": "WEGE3.SA",
+    "timestamp": "2026-05-11T17:58:58.440543",
+    "model_version": "champion",
+    "features_input": {
+        "SP500_Return": 0.5523668889326209,
+        "VIX_Return": 0.407601179735124,
+        "EURUSD_Return": 0.48705479733637974,
+        "Sentiment_Score": 0.0,
+        "Log_Return": 0.3994442727146655,
+        "Target_Log_Return": 0.478854952033003,
+        "Lag_1": 0.6416422439440618,
+        "Lag_2": 0.5360688541437827,
+        "Lag_3": 0.7272917685553819,
+        "Lag_5": 0.43073031510654997,
+        "Rolling_Std_14": 0.2589716953352949,
+        "Distancia_SMA_20": 0.4194673507027927,
+        "Distancia_SMA_50": 0.34194228394462944,
+        "Bollinger_Width": 0.3012981460466314,
+        "Volume_Shock": 0.031145477924564235,
+        "Month_Sin": 0.75,
+        "Month_Cos": 0.06698729810778065,
+        "Day_Sin": 0.5,
+        "Day_Cos": 1.0,
+        "Volume_ROC_5": 1.977718718515856e-309,
+        "OBV_ROC_5": 0.07438485820446897,
+        "RSI_14": 0.3795909700827134,
+        "MACD_Line": 0.0900346129537421,
+        "MACD_Signal": 0.13753129878551967,
+        "MACD_Histogram": 0.3828477277714878,
+        "ATR_14": 0.713589149225025,
+        "ATR_Pct": 0.22220166734524507
+    },
+    "prediction_output": {
+        "symbol": "WEGE3.SA",
+        "current_price": 44.3,
+        "predicted_price_tomorrow": 44.33,
+        "variation_pct": 0.0729,
+        "timestamp": "2026-05-11"
+    }
+}

@@ -17,7 +17,8 @@ graph TD
     subgraph "Inference & Monitoring (AWS Lambda)"
         API -->|Salva Payload| S3_Logs[(S3: Logs JSON)]
         API -->|Consulta| S3_Model[(S3: Modelos Salvos)]
-        API -->|Analisa Anomalias| Evidently[Evidently AI]
+        API -->|Analisa em Memória| Evidently[Evidently AI 0.7+]
+        Evidently -->|Snapshot In-Memory| S3_Reports[(S3: HTML Reports)]
     end
 
     subgraph "Continuous Training (CT)"
@@ -25,7 +26,7 @@ graph TD
         GH_Actions_Retrain -->|Liga Instância| EC2[AWS EC2 t3a.medium]
         EC2 -->|Baixa Dados Históricos| S3_Data[(S3: Processed Data)]
         EC2 -->|Feature Engineering| Pipeline[Pandas Pipeline]
-        Pipeline -->|Treina 5 Algoritmos| ML_Models[LSTM, GRU, XGBoost, Random Forest, LightGBM]
+        Pipeline -->|Treina 5 Algoritmos| ML_Models[LSTM, GRU, XGBoost, LightGBM, Random Forest]
         ML_Models -->|Registra e Elege Campeão| MLflow[Docker: MLflow Server]
         MLflow -->|Salva Novo Campeão| S3_Model
         GH_Actions_Retrain -->|Desliga Instância| EC2
@@ -45,11 +46,12 @@ graph TD
 
 * **API & Backend:** FastAPI, Mangum, Pydantic, Python 3.12.
 * **Machine Learning:** Scikit-learn, XGBoost, LightGBM, PyTorch (Redes Neurais LSTM e GRU).
-* **MLOps & Tracking:** MLflow (Servidor Dockerizado), Evidently AI (Data e Concept Drift).
+* **MLOps & Tracking:** MLflow (Servidor Dockerizado), Evidently AI 0.7+ (Snapshot Architecture).
 * **Cloud & Infraestrutura:** AWS Lambda, AWS S3, AWS ECR, AWS EC2, Boto3.
 * **Automação:** GitHub Actions (CI/CD/CT), SSH Actions.
 * **Processamento e Dados:** Pandas, Numpy, Joblib, yfinance.
 * **NLP & Dados Alternativos:** Finnhub API (Notícias) e HuggingFace / FinBERT (Análise de Sentimento).
+* **Otimização Serverless:** In-memory HTML generation, Lazy Imports para redução de Cold Start, e caching de clientes AWS.
 
 ---
 
@@ -66,29 +68,52 @@ Para capturar o comportamento dinâmico do mercado, o pipeline de dados (`app/ml
 
 ---
 
+---
+
 ## 📡 Endpoints da API
 
-A API está exposta via AWS Lambda e documentada pelo Swagger nativo do FastAPI. As rotas principais são:
+A API está exposta via AWS Lambda e documentada pelo Swagger nativo do FastAPI (`/prod/docs`).
 
-### 1. Predição de Fechamento (`/prod/stock-data-prediction`)
-Retorna a inferência do modelo para o ativo solicitado.
+### 1. Predição de Fechamento
+Retorna a inferência do modelo para o ativo solicitado no próximo dia útil.
+* **URL:** `/prod/stock-data-prediction`
 * **Método:** `GET`
-* **Exemplo de Chamada:** `/prod/stock-data-prediction?symbol=RACE`
+* **Parâmetros:** `symbol` (String, obrigatório)
+* **Exemplo:** 
+  ```bash
+  curl "http://127.0.0.1:8000/prod/stock-data-prediction?symbol=NVDA"
+  ```
 
-### 2. Monitoramento de Saúde (`/prod/monitoring/health`)
-Endpoint de observabilidade para verificar o status do modelo em memória.
+### 2. Monitoramento de Saúde
+Verifica o status operacional da API e do modelo carregado em memória.
+* **URL:** `/prod/monitoring/health`
 * **Método:** `GET`
-* **Retorno Esperado:** `{"model_version": "string", "is_online": true, "total_predictions_today": 0}`
+* **Exemplo:** 
+  ```bash
+  curl "http://127.0.0.1:8000/prod/monitoring/health"
+  ```
 
-### 3. Gatilho de Data Drift (`/prod/monitoring/trigger-drift-check`)
-Aciona o Evidently AI para comparar os logs de produção no S3 com a base de treinamento de referência. Se for detectado Drift (Mudança de Distribuição >= 50%), a API aciona o webhook do GitHub Actions para iniciar o EC2 e retreinar o modelo.
+### 3. Gatilho de Data Drift
+Aciona a análise comparativa entre dados de treino e logs de produção. Se o drift ultrapassar o threshold, dispara o workflow de retreino.
+* **URL:** `/prod/monitoring/trigger-drift-check`
 * **Método:** `POST`
-* **Exemplo de Chamada:** `/prod/monitoring/trigger-drift-check?symbol=NVDA` (Se omitido, assume "ALL").
+* **Parâmetros:** 
+  - `symbol` (String, opcional): Ticker específico (ex: RACE). Se omitido, analisa todos.
+  - `run_async` (Boolean, opcional): Default `false`. Em Lambda, use `false` para garantir a conclusão da escrita no S3.
+* **Exemplo:** 
+  ```bash
+  curl -X POST "http://127.0.0.1:8000/prod/monitoring/trigger-drift-check?symbol=AAPL&run_async=false"
+  ```
 
-### 4. Relatório Visual de Drift (`/prod/monitoring/drift-report/{symbol}`)
-Retorna o Dashboard HTML gerado pelo Evidently AI detalhando as variáveis que sofreram alteração estrutural no mercado.
+### 4. Relatório Visual de Drift (Dashboard)
+Retorna o Dashboard HTML interativo do Evidently AI.
+* **URL:** `/prod/monitoring/drift-report/{symbol}`
 * **Método:** `GET`
-* **Exemplo de Chamada:** `/prod/monitoring/drift-report/VALE3.SA`
+* **Auto-Geração:** Se o relatório não existir no S3, o sistema inicia a geração em background.
+* **Exemplo:** 
+  ```bash
+  curl "http://127.0.0.1:8000/prod/monitoring/drift-report/NVDA"
+  ```
 
 ---
 
@@ -143,25 +168,25 @@ O repositório está organizado utilizando os princípios do Domain-Driven Desig
 │   ├── deploy.yml
 │   └── retreino_workflow.yml
 ├── app/
-│   ├── api/                        # Aplicação Cloud Native (FastAPI)
-│   │   ├── core/                   # Configurações e singletons (S3, Logger)
-│   │   ├── data/
-│   │   ├── endpoints/              # Instância dos Routers
-│   │   ├── models/                 # Modelos de Domínio
-│   │   ├── routers/                # Regras de Rotas (Predição, Monitoramento)
-│   │   ├── schemas/                # Contratos Pydantic
-│   │   ├── services/               # Regras de Negócio (Drift, HuggingFace, Finnhub)
-│   │   └── main.py                 # Ponto de entrada (Mangum Handler)
+│   ├── api/                        # API FastAPI (Inference & Monitoring)
+│   │   ├── core/                   # AWS Clients, Logging e Configurações
+│   │   ├── routers/                # Roteadores: prediction, monitoring, stock_data
+│   │   ├── services/               # Lógica: drift_detector, prediction, s3, news_service
+│   │   ├── schemas/                # Schemas Pydantic para Request/Response
+│   │   ├── data/                   # Logs de predições locais
+│   │   ├── models/                 # Cache local de modelos (PKL)
+│   │   └── main.py                 # Entry point (Mangum / Lambda)
 │   │
-│   └── ml/                         # Módulo de Machine Learning (Retreino EC2)
-│       ├── mlflow/                 # Artefatos Locais
-│       ├── notebooks/              # EDA e Prototipação
-│       ├── pipeline/               # Scripts de Random Search e Treinamento distribuído
-│       ├── server/                 # Arquivos de configuração Docker (docker-compose)
-│       └── requirements-ml.txt     # Dependências pesadas do ambiente de treino
-├── tests/                          # Suítes do Pytest
-├── docker-compose.yaml             
-├── Dockerfile                      # Arquivo base para gerar imagem Lambda (ECR)
-├── requirements.txt                # Dependências enxutas da API
+│   └── ml/                         # MLOps: Pipeline de Treinamento
+│       ├── training/               # Scripts: random_search, train, train_worker
+│       ├── features/               # Pipeline de Feature Engineering
+│       ├── server/                 # Infra: MLflow Docker Compose
+│       ├── utils/                  # Utilitários S3 para treinamento
+│       └── local_artifacts/        # Snapshots e artefatos de treino
+├── notebooks/                      # Análise Exploratória (EDA) e Pesquisa
+├── tests/                          # Suíte de Testes (API, ML, Services)
+├── docker-compose.yaml             # Setup local do MLflow
+├── Dockerfile                      # Definição da imagem para AWS Lambda
+├── requirements.txt                # Dependências da API
 └── README.md
 ```

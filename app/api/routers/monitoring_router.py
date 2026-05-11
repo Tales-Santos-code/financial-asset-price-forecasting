@@ -84,6 +84,7 @@ def trigger_drift_analysis(
     
 @router.get("/drift-report/{symbol}", response_class=HTMLResponse, summary="Visualizar Dashboard")
 def view_drift_report(
+    background_tasks: BackgroundTasks,
     symbol: str = Path(..., description="Ticker único da ação (ex: RACE)")
 ):
     """
@@ -105,10 +106,11 @@ def view_drift_report(
     html_content = read_html_from_s3(settings.S3_BUCKET_NAME, s3_key)
     
     if not html_content:
-        logger.warning(f"Tentativa de acessar relatório inexistente no S3 para {ticker}.")
+        logger.warning(f"Tentativa de acessar relatório inexistente no S3 para {ticker}. Disparando geração.")
+        background_tasks.add_task(check_data_drift, ticker)
         raise HTTPException(
             status_code=404, 
-            detail=f"Relatório não encontrado no Data Lake para {ticker}. Rode o trigger-drift-check primeiro."
+            detail=f"Relatório não encontrado no Data Lake para {ticker}. Gerando relatório, tente novamente em 2 minutos."
         )
         
     logger.info(f"Servindo dashboard de Data Drift via S3 para {ticker}.")

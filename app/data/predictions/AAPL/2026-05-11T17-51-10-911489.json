@@ -1,0 +1,41 @@
+{
+    "symbol": "AAPL",
+    "timestamp": "2026-05-11T17:51:10.911489",
+    "model_version": "champion",
+    "features_input": {
+        "SP500_Return": 0.6870743911695169,
+        "VIX_Return": 0.40714445227596446,
+        "EURUSD_Return": 0.48705479733637974,
+        "Sentiment_Score": 0.0,
+        "Log_Return": 0.7138233231128404,
+        "Target_Log_Return": 0.7182196800745126,
+        "Lag_1": 0.7381089277435631,
+        "Lag_2": 0.7179804939809793,
+        "Lag_3": 0.7296619795255073,
+        "Lag_5": 0.7065454696074891,
+        "Rolling_Std_14": 0.057102457445048715,
+        "Distancia_SMA_20": 0.5323243690323679,
+        "Distancia_SMA_50": 0.5134797162753211,
+        "Bollinger_Width": 0.0591659462812276,
+        "Volume_Shock": 0.06679916779838205,
+        "Month_Sin": 0.75,
+        "Month_Cos": 0.06698729810778065,
+        "Day_Sin": 0.5,
+        "Day_Cos": 1.0,
+        "Volume_ROC_5": 2.55047739349224e-309,
+        "OBV_ROC_5": 0.05404269455082835,
+        "RSI_14": 0.7828585172344534,
+        "MACD_Line": 0.9408892517978009,
+        "MACD_Signal": 0.8514118525828873,
+        "MACD_Histogram": 0.820889557542748,
+        "ATR_14": 0.48129956386325223,
+        "ATR_Pct": 0.05590545976516812
+    },
+    "prediction_output": {
+        "symbol": "AAPL",
+        "current_price": 292.01,
+        "predicted_price_tomorrow": 292.36,
+        "variation_pct": 0.1214,
+        "timestamp": "2026-05-11"
+    }
+}

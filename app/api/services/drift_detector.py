@@ -92,31 +92,38 @@ def load_production_logs(symbol: str) -> pd.DataFrame:
 
 def check_data_drift(symbol: str) -> bool:
     """
-    Execução Cloud Native (compatível com AWS Lambda e Evidently v0.4+).
+    Pipeline Cloud Native: 
+    1. Lê dados históricos do S3 (Referência)
+    2. Lê logs de predição do S3 (Current)
+    3. Gera relatório de Drift em memória (Evidently 0.7+)
+    4. Salva o HTML direto no S3
     """
-    logger.info(f"🔍 Iniciando análise de Data Drift para {symbol} (Cloud Native)...")
+    symbol = symbol.upper().strip()
+    logger.info(f"Iniciando análise de Data Drift para {symbol} (Cloud Native)...")
     
-    bucket = settings.S3_BUCKET_NAME
-    ref_s3_key = f"data/processed/{symbol}_historical_cleaned.csv"
+    # ==========================================
+    # 1. COLETA DE DADOS (DATA LAKE)
+    # ==========================================
+    reference_data = read_csv_from_s3(
+        settings.S3_BUCKET_NAME, 
+        f"data/processed/{symbol}_historical_cleaned.csv"
+    )
     
-    # 1. Busca os dados de referência (treino)
-    try:
-        reference_data = read_csv_from_s3(bucket, ref_s3_key)
-        if reference_data is None or reference_data.empty:
-            logger.error(f"Arquivo de referência não encontrado no S3: s3://{bucket}/{ref_s3_key}")
-            return False
-    except Exception as e:
-        logger.error(f"Erro fatal ao ler referência do S3: {e}")
+    if reference_data is None or reference_data.empty:
+        logger.error(f"Arquivo de referência não encontrado no S3 para {symbol}")
         return False
         
-    # 2. Busca os dados de produção (inferência)
-    current_data = load_production_logs(symbol) 
+    current_data = load_production_logs(symbol)
     
     if current_data.empty or len(current_data) < 5:
-        logger.info("⚠️ Sem volume de dados suficiente em produção para analisar Drift estatístico.")
+        logger.info(f"Sem volume de dados suficiente em produção para {symbol} (Encontrado: {len(current_data)} logs).")
         return False
 
-    features_para_analisar = [c for c in reference_data.columns if c not in ['Target_Log_Return', 'Date']]
+    # Removemos colunas que não são features (Target, Date e colunas de índice do pandas)
+    features_para_analisar = [
+        c for c in reference_data.columns 
+        if c not in ['Target_Log_Return', 'Date'] and not c.startswith('Unnamed')
+    ]
     
     for col in features_para_analisar:
         if col not in current_data.columns:
@@ -135,61 +142,44 @@ def check_data_drift(symbol: str) -> bool:
 
     drift_report = Report([DataDriftPreset()])
     
-    logger.info("⚙️ Calculando distribuições estatísticas nas variáveis...")
+    logger.info("Calculando distribuições estatísticas nas variáveis...")
     
-    # 1. O .run() devolve um objeto SNAPSHOT (Nova arquitetura do Evidently 0.7+)
+    # 1. O .run() devolve um objeto SNAPSHOT
     resultado_eval = drift_report.run(
         reference_data=reference_data[features_para_analisar], 
         current_data=current_data[features_para_analisar]
     )
 
     # 2. Gera o HTML diretamente em memória (String)
-    html_content = drift_report.get_html()
-        
+    html_content = resultado_eval.get_html_str(as_iframe=False)
+    
+    # 3. Salva relatório no S3
     s3_key = f"monitoring/drift_reports/drift_report_{symbol}.html"
     write_html_to_s3(settings.S3_BUCKET_NAME, s3_key, html_content)
     
-    logger.info(f"📊 Dashboard injetado direto no Data Lake (In-Memory): s3://{settings.S3_BUCKET_NAME}/{s3_key}")
+    logger.info(f"Dashboard injetado direto no Data Lake: s3://{settings.S3_BUCKET_NAME}/{s3_key}")
     
-# ==========================================
-    # 5. Extrai os metadados do Evidently (CORRIGIDO COM BASE NO SEU DEBUG)
+    # ==========================================
+    # 5. Extrai os metadados do Evidently
     # ==========================================
     try:
         report_dict = resultado_eval.dict()
         
-        dataset_drift = False # Valor padrão de segurança
+        dataset_drift = False 
         
-        # Navega no dicionário usando a estrutura exata revelada no log
+        # A métrica que define se o dataset inteiro "driftou" (DataDriftPreset)
+        # Procuramos por 'DatasetDriftMetric' nos resultados
         for metric in report_dict.get("metrics", []):
-            config_type = metric.get("config", {}).get("type", "")
-            value_dict = metric.get("value", {})
-            
-            # A nova métrica raiz que define se o dataset inteiro "driftou"
-            if "DriftedColumnsCount" in config_type:
-                share = value_dict.get("share", 0.0)
-                threshold = metric.get("config", {}).get("drift_share", 0.5)
-                
-                # Se a proporção de colunas com drift for maior que o limite, é Drift!
-                if share >= threshold:
-                    dataset_drift = True
+            if "dataset_drift" in metric.get("result", {}):
+                dataset_drift = metric["result"]["dataset_drift"]
                 break
-                
-            # Fallback de segurança caso a DatasetDriftMetric também exista em outra parte do log
-            elif "DatasetDriftMetric" in config_type:
-                dataset_drift = value_dict.get("dataset_drift", False)
-                break
-
-        logger.info(f"Status do Data Drift extraído: {dataset_drift}")
         
-        if dataset_drift is True:
-            logger.warning("🚨 ALERTA VERMELHO: Data Drift Detectado! O comportamento do mercado mudou.")
-            
-            # === GATILHO QUE INICIA O RETREINO ===
+        if dataset_drift:
+            logger.warning(f"DRIFT DETECTADO para {symbol}! Disparando retreino...")
             disparar_retreino_github(symbol)
-            
             return True
         else:
-            logger.info("✅ Dados estáveis. A distribuição se mantém semelhante ao treino. Modelo saudável.")
+            logger.info(f"Sem drift significativo detectado para {symbol}.")
             return False
             
     except Exception as e:
