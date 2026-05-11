@@ -46,7 +46,7 @@ def main():
     if args.symbol:
         symbols = [args.symbol]
     else:
-        # symbols = ["RACE", "NVDA", "AAPL", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "^GSPC"]
+        # symbols = ["RACE", "NVDA", "AAPL", "VALE3.SA", "ITSA4.SA", "WEGE3.SA", "^x"]
         symbols = ["RACE"]
     
     if args.verbose:

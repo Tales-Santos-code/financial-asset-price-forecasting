@@ -167,19 +167,31 @@ def check_data_drift(symbol: str) -> bool:
         
         dataset_drift = False 
         
-        # A métrica que define se o dataset inteiro "driftou" (DataDriftPreset)
-        # Procuramos por 'DatasetDriftMetric' nos resultados
+        # No Evidently 0.7+, os resultados estão no Snapshot.dict()
+        # O Dataset Drift global é calculado pela métrica 'DriftedColumnsCount'
         for metric in report_dict.get("metrics", []):
-            if "dataset_drift" in metric.get("result", {}):
-                dataset_drift = metric["result"]["dataset_drift"]
+            m_config = metric.get("config", {})
+            m_value = metric.get("value", {})
+            m_type = m_config.get("type", "")
+            
+            # 1. Identifica a métrica global de contagem de colunas com drift
+            if "DriftedColumnsCount" in m_type:
+                drift_share_threshold = m_config.get("drift_share", 0.5)
+                actual_share = m_value.get("share", 0.0)
+                
+                if actual_share >= drift_share_threshold:
+                    dataset_drift = True
+                    logger.warning(f"🚨 Drift Global detectado: {actual_share:.2%} de colunas afetadas (Threshold: {drift_share_threshold:.2%})")
+                else:
+                    logger.info(f"✅ Drift Global abaixo do threshold: {actual_share:.2%} de colunas (Threshold: {drift_share_threshold:.2%})")
                 break
         
         if dataset_drift:
-            logger.warning(f"DRIFT DETECTADO para {symbol}! Disparando retreino...")
+            logger.warning(f"⚠️ DRIFT CONFIRMADO para {symbol}! Disparando retreino no GitHub Actions...")
             disparar_retreino_github(symbol)
             return True
         else:
-            logger.info(f"Sem drift significativo detectado para {symbol}.")
+            logger.info(f"✅ Sem drift significativo detectado para {symbol}.")
             return False
             
     except Exception as e:
