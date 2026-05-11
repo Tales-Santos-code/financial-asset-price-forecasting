@@ -4,7 +4,6 @@ import random
 import subprocess
 import sys
 import argparse
-import mlflow
 from mlflow.tracking import MlflowClient
 from mlflow import artifacts
 
@@ -134,7 +133,6 @@ def main():
     # 2. BUSCA DO CAMPEÃO E DEPLOY PARA O S3
     # ==========================================
     print("\n🏆 Buscando o Grande Campeão no MLflow...")
-    from app.api.core.config import settings
     # mlflow.set_tracking_uri(settings.MLFLOW_TRACKING_URI)
     client = MlflowClient()
 
