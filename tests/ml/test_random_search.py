@@ -8,8 +8,7 @@ from unittest.mock import patch, MagicMock
 # ==========================================
 # HACK DE DIRETÓRIO PARA O PYTEST
 # ==========================================
-# Adiciona a pasta exata onde os scripts de ML estão ao "radar" do Python.
-# Assim, quando o random_search tentar fazer 'import utils_s3', o Pytest vai achar o arquivo!
+
 caminho_ml = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../app/ml/training'))
 sys.path.insert(0, caminho_ml)
 
@@ -18,7 +17,7 @@ from app.ml.training.random_search import run_trial, main
 # ==========================================
 # DEFINIÇÃO DO CAMINHO BASE DOS MOCKS
 # ==========================================
-# Mude isto de acordo com o local exato do ficheiro no seu projeto
+
 PATCH_BASE = "app.ml.training.random_search"
 
 # ==========================================
@@ -27,7 +26,7 @@ PATCH_BASE = "app.ml.training.random_search"
 
 @patch(f"{PATCH_BASE}.subprocess.check_call")
 def test_run_trial_sucesso(mock_check_call):
-    # Finge que o script secundário (worker) rodou perfeitamente no terminal
+    # simula que o script worker rodou
     mock_check_call.return_value = 0
     
     resultado = run_trial(["python", "train_worker.py", "--symbol", "RACE"])
@@ -37,12 +36,12 @@ def test_run_trial_sucesso(mock_check_call):
 
 @patch(f"{PATCH_BASE}.subprocess.check_call")
 def test_run_trial_falha(mock_check_call):
-    # Finge que o script secundário deu um erro fatal (Crash)
+    # simula que o script worker deu um erro fatal
     mock_check_call.side_effect = subprocess.CalledProcessError(1, "cmd")
     
     resultado = run_trial(["python", "train_worker.py", "--symbol", "RACE"])
     
-    # A função deve capturar o erro e retornar False, em vez de rebentar o orquestrador
+    # A função deve capturar o erro e retornar False
     assert resultado is False
 
 
@@ -50,30 +49,30 @@ def test_run_trial_falha(mock_check_call):
 # 2. TESTES DA ORQUESTRAÇÃO PRINCIPAL (main)
 # ==========================================
 
-# Criamos uma "Fixture" que gera a resposta do MLflow simulada
+# Criado uma "Fixture" que gera a resposta do MLflow simulada
 @pytest.fixture
 def mock_run_mlflow():
     mock_run = MagicMock()
     mock_run.info.run_id = "run_12345"
-    # Finge que o RMSE foi de 0.05
+    # simula que o RMSE foi de 0.05
     mock_run.data.metrics.get.return_value = 0.05 
     return mock_run
 
 
+@patch("sys.argv", ["random_search.py", "--symbol", "RACE"])
 @patch(f"{PATCH_BASE}.upload_champion_to_s3")
 @patch(f"{PATCH_BASE}.os.walk")
 @patch(f"{PATCH_BASE}.os.path.exists")
 @patch(f"{PATCH_BASE}.artifacts.download_artifacts")
 @patch(f"{PATCH_BASE}.MlflowClient")
-@patch(f"{PATCH_BASE}.mlflow")
 @patch(f"{PATCH_BASE}.run_trial")
-def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_run_mlflow):
+def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_run_mlflow):
     """
     Testa o Caminho Feliz para um modelo Deep Learning (LSTM) 
     que exige que o Scaler seja guardado no S3.
     """
     # 1. Configura os Mocks do MLflow
-    mock_run_mlflow.data.params.get.return_value = "lstm" # Simulamos que o vencedor foi um LSTM
+    mock_run_mlflow.data.params.get.return_value = "lstm" # simula que o vencedor foi um LSTM
     
     mock_client = MagicMock()
     mock_client.get_experiment_by_name.return_value = MagicMock(experiment_id="exp_1")
@@ -82,17 +81,17 @@ def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client
     
     # 2. Configura os Mocks do FileSystem
     mock_download.side_effect = ["/tmp/model_dir", "/tmp/scaler_dir"]
-    mock_exists.return_value = True # Finge que os ficheiros baixados existem
+    mock_exists.return_value = True # simula que os ficheiros baixados existem
     
-    # Simulamos o os.walk para ele "encontrar" um ficheiro .pth (PyTorch)
+    # simula o os.walk para ele "encontrar" um ficheiro .pth (PyTorch)
     mock_walk.return_value = [("/tmp/model_dir", [], ["modelo.pth"])]
     
     # AÇÃO
     main()
     
     # VERIFICAÇÕES
-    # O orquestrador roda 1 vez (N_TRIALS = 1 no script atual)
-    assert mock_run_trial.call_count == 1
+    # O orquestrador roda 5 vezes (N_TRIALS = 5 no script atual)
+    assert mock_run_trial.call_count == 5
     
     # Deve ter procurado pelo vencedor no MLflow
     mock_client.search_runs.assert_called_once()
@@ -101,14 +100,14 @@ def test_main_modelo_com_scaler_sucesso(mock_run_trial, mock_mlflow, mock_client
     assert mock_upload.call_count == 2
 
 
+@patch("sys.argv", ["random_search.py", "--symbol", "RACE"])
 @patch(f"{PATCH_BASE}.upload_champion_to_s3")
 @patch(f"{PATCH_BASE}.os.walk")
 @patch(f"{PATCH_BASE}.os.path.exists")
 @patch(f"{PATCH_BASE}.artifacts.download_artifacts")
 @patch(f"{PATCH_BASE}.MlflowClient")
-@patch(f"{PATCH_BASE}.mlflow")
 @patch(f"{PATCH_BASE}.run_trial")
-def test_main_modelo_xgboost_sucesso(mock_run_trial, mock_mlflow, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_run_mlflow):
+def test_main_modelo_xgboost_sucesso(mock_run_trial, mock_client_class, mock_download, mock_exists, mock_walk, mock_upload, mock_run_mlflow):
     """
     Testa o Caminho Feliz para um modelo de Árvore (XGBoost).
     O pipeline sempre sobe o modelo E o scaler.
@@ -133,13 +132,14 @@ def test_main_modelo_xgboost_sucesso(mock_run_trial, mock_mlflow, mock_client_cl
     # VERIFICAÇÕES
     # Pipeline atual: sobe modelo E scaler (2 uploads)
     assert mock_upload.call_count == 2
+    assert mock_run_trial.call_count == 5
 
 
+@patch("sys.argv", ["random_search.py", "--symbol", "RACE"])
 @patch(f"{PATCH_BASE}.upload_champion_to_s3")
 @patch(f"{PATCH_BASE}.MlflowClient")
-@patch(f"{PATCH_BASE}.mlflow")
 @patch(f"{PATCH_BASE}.run_trial")
-def test_main_experimento_sem_resultados(mock_run_trial, mock_mlflow, mock_client_class, mock_upload):
+def test_main_experimento_sem_resultados(mock_run_trial, mock_client_class, mock_upload):
     """
     Garante que o script não rebenta se os treinamentos falharem
     e não houver modelos registados no MLflow.

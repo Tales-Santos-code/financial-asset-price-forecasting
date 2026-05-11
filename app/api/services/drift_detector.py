@@ -10,6 +10,9 @@ from app.api.services.s3 import write_html_to_s3, read_json_from_s3, read_csv_fr
 from app.api.core.aws import get_s3_client
 logger = setup_logger("drift_detector")
 
+from evidently import Report
+from evidently.presets import DataDriftPreset
+
 def disparar_retreino_github(symbol: str):
     """
     Bate na API do GitHub Actions para iniciar o workflow de retreino.
@@ -127,11 +130,7 @@ def check_data_drift(symbol: str) -> bool:
 
     # ==========================================
     # ARQUITETURA IN-MEMORY PARA AWS (EVIDENTLY V0.7+)
-    # ==========================================
-    # Importação tardia (Lazy Import) para evitar cold start pesado em rotas que não usam drift
-    from evidently import Report
-    from evidently.presets import DataDriftPreset
-    
+    # Silencia o joblib warning no Lambda
     # Silencia o joblib warning no Lambda (usa /tmp em vez de shared memory inexistente)
     os.environ["JOBLIB_TEMP_FOLDER"] = "/tmp"
 

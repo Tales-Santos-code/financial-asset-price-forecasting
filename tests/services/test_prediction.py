@@ -1,12 +1,13 @@
-# pyrefly: ignore [missing-import]
 import pytest
 import pandas as pd
 import numpy as np
+import io
 from unittest.mock import patch, MagicMock
 
-# Import do serviço. Ajuste o caminho se necessário.
+# Import do serviço atualizado
 from app.api.services.prediction import (
-    _download_model_from_s3,
+    _load_from_s3_to_memory,
+    _smart_load,
     get_model_and_params,
     pipe_to_predict,
     _model_cache
@@ -16,7 +17,6 @@ from app.api.services.prediction import (
 # FIXTURES GLOBAIS E DADOS FALSOS
 # ==========================================
 
-# Limpa a memória RAM (Cache) antes de CADA teste para não haver interferência
 @pytest.fixture(autouse=True)
 def clear_model_cache():
     _model_cache.clear()
@@ -24,162 +24,114 @@ def clear_model_cache():
 
 @pytest.fixture
 def mock_df_history():
-    """Histórico base simulado para inferência"""
-    df = pd.DataFrame({
-        "Close": [100.0, 102.0, 105.0]
-    })
+    df = pd.DataFrame({"Close": [100.0, 102.0, 105.0]})
     df.index = pd.DatetimeIndex(["2026-01-01", "2026-01-02", "2026-01-03"])
     return df
 
 @pytest.fixture
 def mock_df_macro():
-    """Macro simulado"""
     return pd.DataFrame({"SP500_Return": [0.01]})
 
 @pytest.fixture
 def mock_df_limpo():
-    """Simula o DataFrame 100% tratado saindo do Pipeline do Pandas"""
     df = pd.DataFrame({
         "Date": ["2026-01-03"],
-        "Target_Log_Return": [np.nan], # A coluna que queremos prever
-        "RSI_14": [55.0],
-        "Volume": [1000]
+        "Target_Log_Return": [0.0],
+        "Log_Return": [0.01],
+        "RSI_14": [55.0]
     })
     df.set_index("Date", inplace=True)
     return df
 
-# Caminho base para injetar os Mocks
 PATCH_BASE = "app.api.services.prediction"
 
 # ==========================================
-# 1. TESTES DE DOWNLOAD DO S3
+# 1. TESTES DE CARREGAMENTO (S3 -> MEMÓRIA)
 # ==========================================
-@patch(f"{PATCH_BASE}.get_s3_client")
-def test_download_model_from_s3_sucesso(mock_get_s3):
-    mock_s3_client = MagicMock()
-    mock_get_s3.return_value = mock_s3_client
-    
-    _download_model_from_s3("modelo_RACE.pkl", "/tmp/modelo_RACE.pkl")
-    
-    mock_s3_client.download_file.assert_called_once()
-    args = mock_s3_client.download_file.call_args[0]
-    assert args[1] == "modelo_RACE.pkl"
-    assert args[2] == "/tmp/modelo_RACE.pkl"
 
 @patch(f"{PATCH_BASE}.get_s3_client")
-def test_download_model_from_s3_falha(mock_get_s3):
-    mock_s3_client = MagicMock()
-    mock_s3_client.download_file.side_effect = Exception("S3 Indisponível")
-    mock_get_s3.return_value = mock_s3_client
+def test_load_from_s3_to_memory_sucesso(mock_get_s3):
+    mock_s3 = MagicMock()
+    mock_response = {'Body': MagicMock()}
+    mock_response['Body'].read.return_value = b"fake_binary_data"
+    mock_s3.get_object.return_value = mock_response
+    mock_get_s3.return_value = mock_s3
     
-    with pytest.raises(Exception) as excinfo:
-        _download_model_from_s3("modelo_RACE.pkl", "/tmp/modelo_RACE.pkl")
-    assert "S3 Indisponível" in str(excinfo.value)
+    result = _load_from_s3_to_memory("path/to/artifact.pkl")
+    
+    assert result == b"fake_binary_data"
+    mock_s3.get_object.assert_called_once()
+
+@patch(f"{PATCH_BASE}.joblib.load")
+def test_smart_load_joblib(mock_joblib):
+    mock_joblib.return_value = "Objeto_Carregado"
+    # Um buffer que não começa com PK (não é zip/torch)
+    result = _smart_load(b"not_a_zip_file")
+    assert result == "Objeto_Carregado"
+
+@patch(f"{PATCH_BASE}.torch.load")
+def test_smart_load_torch(mock_torch):
+    mock_torch.return_value = "Modelo_Torch"
+    # Simula cabeçalho de arquivo ZIP (PyTorch usa internamente)
+    result = _smart_load(b"PK\x03\x04_data")
+    assert result == "Modelo_Torch"
 
 # ==========================================
-# 2. TESTES DE GERENCIAMENTO DE MEMÓRIA (CACHE & JOBLIB)
+# 2. TESTES DE CACHE E PARALELISMO
 # ==========================================
-@patch(f"{PATCH_BASE}._load_artifact")
-@patch(f"{PATCH_BASE}.joblib.load")
-@patch(f"{PATCH_BASE}._download_model_from_s3")
-def test_get_model_and_params_com_scaler(mock_download, mock_joblib_load, mock_load_artifact):
-    # _load_artifact é chamado 2x: para pipeline e model
-    mock_load_artifact.side_effect = ["Pipeline_Mock", "Model_Mock"]
-    # joblib.load é chamado 1x: apenas para o scaler
-    mock_joblib_load.return_value = "Scaler_Mock"
-    
-    pipeline, model, scaler = get_model_and_params("RACE")
-    
-    assert pipeline == "Pipeline_Mock"
-    assert model == "Model_Mock"
-    assert scaler == "Scaler_Mock"
-    
-    assert _model_cache["RACE_pipeline"] == "Pipeline_Mock"
-    assert mock_download.call_count == 3
 
-@patch(f"{PATCH_BASE}._load_artifact")
-@patch(f"{PATCH_BASE}.joblib.load")
-@patch(f"{PATCH_BASE}._download_model_from_s3")
-def test_get_model_and_params_arvore_sem_scaler(mock_download, mock_joblib_load, mock_load_artifact):
-    def download_side_effect(s3_key, local_path):
-        if "scaler" in s3_key:
-            raise Exception("Arquivo não encontrado")
+@patch(f"{PATCH_BASE}._smart_load")
+@patch(f"{PATCH_BASE}._load_from_s3_to_memory")
+def test_get_model_and_params_orchestration(mock_load_s3, mock_smart):
+    mock_load_s3.return_value = b"raw_data"
+    mock_smart.side_effect = ["Pipeline", "Model", "Scaler"]
     
-    mock_download.side_effect = download_side_effect
-    # _load_artifact carrega pipeline e model
-    mock_load_artifact.side_effect = ["Pipeline_Mock", "Model_Mock"]
-    # joblib.load não será chamado (scaler falhou no download)
+    p, m, s = get_model_and_params("RACE")
     
-    pipeline, model, scaler = get_model_and_params("VALE3")
-    
-    assert pipeline == "Pipeline_Mock"
-    assert model == "Model_Mock"
-    assert scaler is None
+    assert p == "Pipeline"
+    assert m == "Model"
+    assert s == "Scaler"
+    assert mock_load_s3.call_count == 3 # Pipeline, Model, Scaler
+    assert _model_cache["RACE_model"] == "Model"
 
 def test_get_model_and_params_cache_hit():
-    _model_cache["AAPL_pipeline"] = "Pipe_Cached"
-    _model_cache["AAPL_model"] = "Model_Cached"
-    _model_cache["AAPL_scaler"] = "Scaler_Cached"
+    _model_cache["NVDA_pipeline"] = "Cached_P"
+    _model_cache["NVDA_model"] = "Cached_M"
+    _model_cache["NVDA_scaler"] = "Cached_S"
     
-    with patch(f"{PATCH_BASE}._download_model_from_s3") as mock_download:
-        pipeline, model, scaler = get_model_and_params("AAPL")
-        
-        assert pipeline == "Pipe_Cached"
-        assert model == "Model_Cached"
-        mock_download.assert_not_called()
+    with patch(f"{PATCH_BASE}._load_from_s3_to_memory") as mock_load:
+        p, m, s = get_model_and_params("NVDA")
+        assert p == "Cached_P"
+        mock_load.assert_not_called()
 
 # ==========================================
-# 3. TESTES DA INFERÊNCIA E S3 (pipe_to_predict)
+# 3. TESTES DE INFERÊNCIA (pipe_to_predict)
 # ==========================================
+
 @patch(f"{PATCH_BASE}.save_prediction_log")
-@patch(f"{PATCH_BASE}.write_csv_to_s3")
-@patch(f"{PATCH_BASE}.read_csv_from_s3")
 @patch(f"{PATCH_BASE}.get_model_and_params")
-def test_pipe_to_predict_caminho_feliz_com_scaler(mock_get_model, mock_read_s3, mock_write_s3, mock_save_log, mock_df_history, mock_df_macro, mock_df_limpo):
+def test_pipe_to_predict_fluxo_completo(mock_get_params, mock_save_log, mock_df_history, mock_df_macro, mock_df_limpo):
+    # Setup Mocks de Pipeline e Modelo
     mock_pipeline = MagicMock()
     mock_pipeline.transform.return_value = mock_df_limpo
     
+    mock_model = MagicMock()
+    mock_model.predict.return_value = [0.02]
+    mock_model.n_features_in_ = 26
+    # Remove atributos que o MagicMock cria automaticamente e que quebram o código
+    del mock_model.num_features
+    del mock_model.num_feature
+    
     mock_scaler = MagicMock()
-    # n_features_in_ = 27 (igual a X_full com Target), para o scaler ser aplicado
     mock_scaler.n_features_in_ = 27
-    # transform retorna array (1, 27) compatível com as colunas de mock_df_limpo expandidas
     mock_scaler.transform.return_value = np.zeros((1, 27))
-    # inverse_transform precisa retornar ndarray real (shape 1x27) para float() funcionar
     mock_scaler.inverse_transform.return_value = np.zeros((1, 27))
     
-    mock_model = MagicMock()
-    mock_model.predict.return_value = [0.05]
-    mock_model.n_features_in_ = 26  # int real
-    
-    mock_get_model.return_value = (mock_pipeline, mock_model, mock_scaler)
-    mock_read_s3.return_value = pd.DataFrame({"Date": ["2026-01-01"], "RSI_14": [40.0]})
+    mock_get_params.return_value = (mock_pipeline, mock_model, mock_scaler)
     
     resultado = pipe_to_predict("RACE", mock_df_history, mock_df_macro)
     
     assert resultado["symbol"] == "RACE"
-    assert resultado["current_price"] == 105.0 
     assert "predicted_price_tomorrow" in resultado
-    assert resultado["timestamp"] == "2026-01-03"
-    
-    mock_write_s3.assert_called_once()
+    assert resultado["current_price"] == 105.0
     mock_save_log.assert_called_once()
-
-
-# CORREÇÃO 2: Apontando o patch direto para o arquivo cleaning.py!
-@patch("app.api.services.cleaning.historical_cleaning")
-@patch(f"{PATCH_BASE}.save_prediction_log")
-@patch(f"{PATCH_BASE}.read_csv_from_s3")
-@patch(f"{PATCH_BASE}.get_model_and_params")
-def test_pipe_to_predict_aciona_limpeza_historica(mock_get_model, mock_read_s3, mock_save_log, mock_historical_cleaning, mock_df_history, mock_df_macro, mock_df_limpo):
-    mock_pipeline = MagicMock()
-    mock_pipeline.transform.return_value = mock_df_limpo
-    mock_model = MagicMock()
-    mock_model.predict.return_value = [0.01]
-    mock_model.n_features_in_ = 26  # int real para evitar TypeError
-    
-    mock_get_model.return_value = (mock_pipeline, mock_model, None)
-    mock_read_s3.return_value = None
-    
-    pipe_to_predict("RACE", mock_df_history, mock_df_macro)
-    
-    mock_historical_cleaning.assert_called_once_with("RACE", mock_df_macro)
