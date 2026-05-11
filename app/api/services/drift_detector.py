@@ -144,23 +144,13 @@ def check_data_drift(symbol: str) -> bool:
         current_data=current_data[features_para_analisar]
     )
 
-    temp_html_path = os.path.join(tempfile.gettempdir(), f"drift_report_{symbol}.html")
-    
-    # 2. Chamamos os métodos de exportação direto no Snapshot
-    resultado_eval.save_html(temp_html_path)
-    
-    # 3. Lê o HTML como string e injeta direto no S3
-    with open(temp_html_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
+    # 2. Gera o HTML diretamente em memória (String)
+    html_content = drift_report.get_html()
         
     s3_key = f"monitoring/drift_reports/drift_report_{symbol}.html"
     write_html_to_s3(settings.S3_BUCKET_NAME, s3_key, html_content)
     
-    logger.info(f"📊 Dashboard injetado direto no Data Lake: s3://{settings.S3_BUCKET_NAME}/{s3_key}")
-    
-    # 4. Limpa a memória temporária (Boa prática Serverless)
-    if os.path.exists(temp_html_path):
-        os.remove(temp_html_path)
+    logger.info(f"📊 Dashboard injetado direto no Data Lake (In-Memory): s3://{settings.S3_BUCKET_NAME}/{s3_key}")
     
 # ==========================================
     # 5. Extrai os metadados do Evidently (CORRIGIDO COM BASE NO SEU DEBUG)

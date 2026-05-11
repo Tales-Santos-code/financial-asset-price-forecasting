@@ -1,5 +1,11 @@
+from __future__ import annotations
 import json
 import io
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
+
 from app.api.core.logger import setup_logger
 
 # Importamos o client do nosso novo core centralizado!
@@ -52,10 +58,9 @@ def read_csv_from_s3(bucket: str, key: str) -> pd.DataFrame:
         logger.error(f"Error reading CSV from s3://{bucket}/{key}: {e}", exc_info=True)
         raise
 
-def write_csv_to_s3(bucket: str, key: str, df: pd.DataFrame, mode: str = "w") -> None:
+def write_csv_to_s3(bucket: str, key: str, df: Any, mode: str = "w") -> None:
     logger.info(f"Writing CSV to s3://{bucket}/{key} (mode={mode})")
     try:
-        import pandas as pd
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
         s3_client.put_object(Bucket=bucket, Key=key, Body=csv_buffer.getvalue().encode("utf-8"))
