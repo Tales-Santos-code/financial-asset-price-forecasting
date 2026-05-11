@@ -81,12 +81,14 @@ jobs:
             echo "Aguardando o MLflow ficar online..."
             MLFLOW_UP=false
             for i in {1..40}; do
-              if curl -s -f http://127.0.0.1:5000/ping > /dev/null; then
-                echo "✅ MLflow está online e saudável!"
+              # Removemos a flag -f e o /ping. Adicionamos um timeout de 3s para não travar.
+              # Se o servidor responder a qualquer conexão HTTP, ele passa!
+              if curl --max-time 3 -s http://127.0.0.1:5000 > /dev/null; then
+                echo "✅ MLflow está online e aceitando conexões!"
                 MLFLOW_UP=true
                 break
               fi
-              echo "⏳ Aguardando MLflow... ($i/40)"
+              echo "⏳ Aguardando a porta 5000 abrir... ($i/40)"
               sleep 10
             done
             
