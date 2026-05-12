@@ -43,7 +43,7 @@ def _smart_load(buffer: bytes):
     
     try:
         return joblib.load(io.BytesIO(buffer))
-    except Exception:
+    except Exception: 
         # Fallback para XGBoost
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp.write(buffer)

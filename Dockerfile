@@ -1,12 +1,24 @@
-FROM public.ecr.aws/lambda/python:3.12
+# Usa uma imagem oficial, leve e padrão do Python (baseada em Debian)
+FROM python:3.12-slim
 
-# 1. Instala a biblioteca de sistema operacional exigida pelo XGBoost
-RUN dnf install -y libgomp
+# Define o diretório de trabalho padrão dentro do contêiner
+WORKDIR /app
 
-COPY requirements.txt ${LAMBDA_TASK_ROOT}
+# Instala a biblioteca do sistema operacional exigida pelo XGBoost
+# (No Debian/Ubuntu, o 'libgomp' se chama 'libgomp1' e usamos apt-get em vez de dnf)
+RUN apt-get update && \
+    apt-get install -y libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
 
+# Copia os requisitos e instala as dependências
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY ./app ${LAMBDA_TASK_ROOT}/app
+# Copia a pasta da sua aplicação
+COPY ./app ./app
 
-CMD ["app.api.main.handler"]
+# Expõe a porta que a API vai rodar
+EXPOSE 8080
+
+# Inicia o servidor Uvicorn diretamente (substitui o Lambda Handler)
+CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8080"]

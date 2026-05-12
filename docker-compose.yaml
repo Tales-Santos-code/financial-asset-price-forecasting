@@ -1,14 +1,13 @@
 version: '3.8'
+
 services:
-  financial-asset-price-forecasting-lambda:
+  finance-api:
     build: .
+    container_name: finance-api
     ports:
-      - "8000:8000"
+      - "8080:8080"
     environment:
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} 
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - AWS_DEFAULT_REGION=us-east-1
       - S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an
-    entrypoint: /bin/sh -c "python -m uvicorn app.api.main:app --host 0.0.0.0 --port 8000 --reload"
-    volumes:
-      - ./app:/var/task/app
+    # Garante que a API volte a ligar sozinha caso a máquina reinicie ou dê crash
+    restart: always

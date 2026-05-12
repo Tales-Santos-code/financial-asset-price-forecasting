@@ -1,0 +1,141 @@
+name: CI/CD Pipeline - financial-asset-price-forecasting
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  # ==========================================
+  # JOB 1: INTEGRAÇÃO CONTÍNUA (Testes e Qualidade)
+  # ==========================================
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 📥 Clonar o Código
+      uses: actions/checkout@v3
+
+    - name: 🐍 Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 📦 Instalar dependências de Teste
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff pytest
+        pip install -r requirements.txt 
+
+    - name: 🧹 Linting e Formatação (Ruff)
+      run: |
+        echo "Verificando se o código segue a PEP8..."
+        ruff check app/
+
+    - name: 🧪 Testes Unitários (Pytest)
+      run: |
+        echo "Rodando os testes..."
+        # pytest tests/
+
+  # ==========================================
+  # JOB 2: ENTREGA CONTÍNUA (API no AWS Lambda)
+  # ==========================================
+  deploy-lambda:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+    - name: 📥 Clonar o Código
+      uses: actions/checkout@v3
+
+    - name: 🔐 Autenticar na AWS
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+
+    - name: 🐳 Login no Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: 🏗️ Build, Tag, e Push do Docker
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: financial-asset-price-forecasting
+        IMAGE_TAG: latest
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+    - name: 🚀 Atualizar o AWS Lambda (Código e Configurações)
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: financial-asset-price-forecasting
+        IMAGE_TAG: latest
+        LAMBDA_NAME: financial-asset-price-forecasting-lambda
+      run: |
+        # 1. Atualiza o código (Imagem Docker)
+        aws lambda update-function-code \
+          --function-name $LAMBDA_NAME \
+          --image-uri $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+        # 2. Aguarda a atualização do código concluir antes de mudar a config
+        echo "Aguardando atualização do código..."
+        aws lambda wait function-updated --function-name $LAMBDA_NAME
+
+        # 3. Atualiza as Variáveis de Ambiente (Garante que chaves antigas sumam)
+        aws lambda update-function-configuration \
+          --function-name $LAMBDA_NAME \
+          --environment "Variables={S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an,MLFLOW_TRACKING_URI=\"${{ secrets.MLFLOW_TRACKING_URI || 'http://54.82.227.100:5000' }}\"}"
+
+  # # ==========================================
+  # # JOB 3: ATUALIZAÇÃO DO SERVIDOR MLFLOW (AWS EC2) ONLY FIRST DEPLOYMENT
+  # # ==========================================
+  # deploy-ec2:
+  #   runs-on: ubuntu-latest
+  #   needs: test # Só atualiza a EC2 se os testes passarem
+
+  #   steps:
+  #   - name: 🔐 Autenticar na AWS
+  #     uses: aws-actions/configure-aws-credentials@v2
+  #     with:
+  #       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #       aws-region: us-east-1
+
+  #   - name: 1️⃣ Ligar a Máquina EC2
+  #     run: |
+  #       aws ec2 start-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
+  #       echo "Aguardando a máquina inicializar..."
+  #       aws ec2 wait instance-running --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
+  #       sleep 30
+
+  #   - name: 2️⃣ Pegar IP Público da Máquina
+  #     id: get-ip
+  #     run: |
+  #       PUBLIC_IP=$(aws ec2 describe-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }} --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+  #       echo "ip=$PUBLIC_IP" >> $GITHUB_OUTPUT
+
+  #   - name: 3️⃣ Acessar via SSH, Atualizar Código e Docker
+  #     uses: appleboy/ssh-action@master
+  #     with:
+  #       host: ${{ steps.get-ip.outputs.ip }}
+  #       username: ubuntu 
+  #       key: ${{ secrets.EC2_SSH_KEY }}
+  #       script: |
+  #         cd /home/ubuntu/financial-asset-price-forecasting
+          
+  #         # Puxa o código novo que você acabou de subir para a main
+  #         git pull origin main
+          
+  #         # Reinicia o servidor MLflow com as configurações novas (se houver)
+  #         docker compose -f app/ml/server/docker-compose-ec2.yaml up -d --build
+          
+  #         # Atualiza as bibliotecas do ambiente virtual do Python (caso você tenha mudado o requirements-ml.txt)
+  #         source venv/bin/activate
+  #         pip install -r app/ml/requirements-ml.txt
+
+  #   - name: 4️⃣ Desligar a Máquina EC2
+  #     if: always() # Garante que a máquina seja desligada mesmo se os passos acima falharem
+  #     run: |
+  #       echo "Atualização concluída. Desligando a EC2 para economizar custos..."
+  #       aws ec2 stop-instances --instance-ids ${{ secrets.EC2_INSTANCE_ID }}
