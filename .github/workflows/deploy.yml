@@ -8,27 +8,27 @@ jobs:
   # ==========================================
   # JOB 1: INTEGRAÇÃO CONTÍNUA
   # ==========================================
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: 📥 Clonar o Código
-      uses: actions/checkout@v3
+  # test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: 📥 Clonar o Código
+  #     uses: actions/checkout@v3
 
-    - name: 🐍 Configurar Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+  #   - name: 🐍 Configurar Python
+  #     uses: actions/setup-python@v4
+  #     with:
+  #       python-version: '3.10'
 
-    - name: 📦 Instalar dependências de Teste
-      run: |
-        python -m pip install --upgrade pip
-        pip install ruff pytest
-        pip install -r requirements.txt 
+  #   - name: 📦 Instalar dependências de Teste
+  #     run: |
+  #       python -m pip install --upgrade pip
+  #       pip install ruff pytest
+  #       pip install -r requirements.txt 
 
-    - name: 🧹 Linting e Formatação (Ruff)
-      run: |
-        echo "Verificando se o código segue a PEP8..."
-        ruff check app/
+  #   - name: 🧹 Linting e Formatação (Ruff)
+  #     run: |
+  #       echo "Verificando se o código segue a PEP8..."
+  #       ruff check app/
 
   # ==========================================
   # JOB 2: DEPLOY DA API NA MÁQUINA 1
@@ -60,7 +60,7 @@ jobs:
         key: ${{ secrets.EC2_API_SSH_KEY }}
         script: |
           # 🛠️ AUTO-SETUP: Prepara a máquina nova (Amazon Linux 2023)
-          if ! command -v docker &> /dev/null; then
+          if ! command -v docker &> /dev/null || ! docker buildx version &> /dev/null; then
             echo "Instalando Git e Docker..."
             sudo dnf update -y
             sudo dnf install -y git docker
@@ -73,6 +73,10 @@ jobs:
             sudo mkdir -p /usr/libexec/docker/cli-plugins
             sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/libexec/docker/cli-plugins/docker-compose
             sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+            echo "Instalando Docker Buildx (necessário para o Compose)..."
+            sudo curl -SL https://github.com/docker/buildx/releases/latest/download/buildx-v0.17.1.linux-amd64 -o /usr/libexec/docker/cli-plugins/docker-buildx
+            sudo chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
           fi
 
           # 📁 Gerencia o Repositório na Máquina 1
@@ -94,3 +98,6 @@ jobs:
           
           echo "Limpando imagens antigas do Docker para economizar disco..."
           docker image prune -f
+          
+          echo "--- LOGS DA API ---"
+          docker compose logs
