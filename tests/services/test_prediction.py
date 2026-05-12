@@ -1,7 +1,6 @@
 import pytest
 import pandas as pd
 import numpy as np
-import io
 from unittest.mock import patch, MagicMock
 
 # Import do serviço atualizado
