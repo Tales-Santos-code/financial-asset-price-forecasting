@@ -3,8 +3,6 @@ import tempfile
 import joblib
 import numpy as np
 import pandas as pd
-import torch
-import xgboost as xgb
 import io
 from concurrent.futures import ThreadPoolExecutor
 
@@ -40,6 +38,7 @@ def _smart_load(buffer: bytes):
         return None
     
     if buffer.startswith(b"PK"):
+        import torch
         return torch.load(io.BytesIO(buffer), map_location="cpu", weights_only=False)
     
     try:
@@ -50,6 +49,7 @@ def _smart_load(buffer: bytes):
             tmp.write(buffer)
             tmp_path = tmp.name
         try:
+            import xgboost as xgb
             model = xgb.XGBRegressor()
             model.load_model(tmp_path)
             return model
@@ -86,14 +86,16 @@ def get_model_and_params(symbol: str):
 def _model_predict(model, X_full: pd.DataFrame, n_expected_features: int) -> float:
     n_input_cols = X_full.shape[1]
     
-    if isinstance(model, torch.nn.Module):
-        model.eval()
-        seq_len = n_expected_features // n_input_cols if n_expected_features > n_input_cols else 1
-        X_window = X_full.tail(seq_len).values.astype("float32")
-        X_tensor = torch.tensor(X_window, dtype=torch.float32).unsqueeze(0)
-        with torch.no_grad():
-            output = model(X_tensor)
-        return float(output.squeeze().item())
+    if n_input_cols > 0: # Check to avoid division by zero
+        import torch
+        if isinstance(model, torch.nn.Module):
+            model.eval()
+            seq_len = n_expected_features // n_input_cols if n_expected_features > n_input_cols else 1
+            X_window = X_full.tail(seq_len).values.astype("float32")
+            X_tensor = torch.tensor(X_window, dtype=torch.float32).unsqueeze(0)
+            with torch.no_grad():
+                output = model(X_tensor)
+            return float(output.squeeze().item())
     else:
         if n_expected_features > n_input_cols:
             seq_len = n_expected_features // n_input_cols
