@@ -56,17 +56,30 @@ jobs:
       uses: appleboy/ssh-action@master
       with:
         host: ${{ steps.get-ip.outputs.ip }}
-        username: ubuntu 
-        key: ${{ secrets.EC2_API_SSH_KEY }} # Pode usar a mesma chave SSH para ambas as máquinas
+        username: ec2-user 
+        key: ${{ secrets.EC2_API_SSH_KEY }}
         script: |
+          # 🛠️ AUTO-SETUP: Prepara a máquina nova (Amazon Linux) se necessário
+          if ! command -v docker &> /dev/null; then
+            echo "Instalando Git, Docker e Docker Compose..."
+            sudo dnf update -y
+            sudo dnf install -y git docker docker-compose-plugin
+            sudo systemctl start docker
+            sudo systemctl enable docker
+            sudo usermod -aG docker ec2-user
+            # Libera a permissão do Docker para o script rodar sem precisar relogar
+            sudo chmod 666 /var/run/docker.sock 
+          fi
+
           # 📁 Gerencia o Repositório na Máquina 1
-          cd /home/ubuntu
+          cd /home/ec2-user
           if [ ! -d "financial-asset-price-forecasting" ]; then
             echo "Clonando o repositório pela primeira vez..."
             git clone https://github.com/Tales-Santos-code/financial-asset-price-forecasting.git
           fi
           
-          cd /home/ubuntu/financial-asset-price-forecasting
+          # ✅ CORREÇÃO: Entra na pasta correta do ec2-user
+          cd /home/ec2-user/financial-asset-price-forecasting
           
           echo "Puxando novo código do GitHub..."
           git checkout .
