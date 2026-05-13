@@ -76,7 +76,7 @@ jobs:
 
             # 🐳 Garante que o MLflow (Cartório) está online antes do treino
             echo "Subindo o MLflow via Docker Compose..."
-            docker compose -f app/ml/server/docker-compose-ec2.yaml up -d
+            docker compose -f app/ml/server/docker-compose-ec2.yaml up -d --build --force-recreate
 
             # Dá um tempo para o banco e o servidor MLflow iniciarem completamente
             echo "Aguardando o MLflow ficar online..."
