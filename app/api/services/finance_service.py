@@ -8,7 +8,7 @@ logger = setup_logger("finance_service")
 
 class FinanceService:
     def __init__(self, ticker: str = "RACE", tickers_macro: list = ["^GSPC", "^VIX", "EURUSD=X"]):
-        self.ticker_symbol = ticker 
+        self.ticker_symbol = ticker
         self.stock_historical = yf.Ticker(ticker)
         self.ticker_macro = tickers_macro
 
@@ -18,7 +18,7 @@ class FinanceService:
         """
         current_interval = "1d" if full else interval
         bucket = settings.S3_BUCKET_NAME
-        
+
         # O caminho do nosso "Ponteiro" no S3
         pointer_key = f"checkpoints/{self.ticker_symbol}_{current_interval}_pointer.json"
         start_date = None
@@ -26,28 +26,39 @@ class FinanceService:
         if use_checkpoint:
             # 1. Busca o ponteiro no S3
             pointer_data = read_json_from_s3(bucket, pointer_key)
-            today_dt = pd.Timestamp.now().normalize()
+            today_dt = pd.Timestamp.now().normalize()#F841
             if pointer_data and "last_date" in pointer_data:
                 # Pega a última data e soma 1 dia (para não baixar o último dia duplicado)
                 last_date_dt = pd.to_datetime(pointer_data["last_date"])
-                start_date = (last_date_dt + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                logger.info(f"Ponteiro encontrado! Baixando dados APENAS a partir de {start_date}")
+                if last_date_dt >= today_dt:
+                    logger.info(
+                        f"Nenhum dado novo encontrado para {self.ticker_symbol} na API."
+                    )
+                else:
+                    start_date = (last_date_dt + pd.Timedelta(days=1)).strftime(
+                        "%Y-%m-%d"
+                    )
+                    logger.info(
+                        f"Ponteiro encontrado! Baixando dados APENAS a partir de {start_date}"
+                    )
             else:
-                logger.info("Nenhum ponteiro encontrado no S3. Iniciando carga total (max).")
+                logger.info(
+                    "Nenhum ponteiro encontrado no S3. Iniciando carga total (max)."
+                )
 
         # 2. Chama a API do Yahoo Finance
         if start_date:
             df_financial = self.stock_historical.history(
-                start=start_date, 
-                interval=current_interval, 
-                prepost=prepost, 
+                start=start_date,
+                interval=current_interval,
+                prepost=prepost,
                 actions=actions
             )
         else:
             df_financial = self.stock_historical.history(
-                period="max", 
-                interval=current_interval, 
-                prepost=prepost, 
+                period="max",
+                interval=current_interval,
+                prepost=prepost,
                 actions=actions
             )
 
@@ -62,7 +73,7 @@ class FinanceService:
         if use_checkpoint:
             # Pega a data mais recente do lote que acabou de baixar
             new_last_date = df_financial.index.max().strftime("%Y-%m-%d")
-            
+
             # Salva o novo ponteiro no S3
             write_json_to_s3(bucket, pointer_key, {"last_date": new_last_date})
             logger.info(f"Ponteiro atualizado no S3 para: {new_last_date}")
@@ -71,17 +82,17 @@ class FinanceService:
             return df_financial[["Open", "High", "Low", "Close", "Volume"]]
 
         return df_financial
-    
+
     def get_macro_data(self, min_date, max_date) -> pd.DataFrame:
         """
         Busca dados macroeconômicos comparativos baseado nas datas da ação.
         """
         max_date_dt = pd.to_datetime(max_date)
-        
+
         df_macro = yf.download(
-            self.ticker_macro, 
-            start=min_date, 
-            end=max_date_dt + pd.Timedelta(days=5), 
+            self.ticker_macro,
+            start=min_date,
+            end=max_date_dt + pd.Timedelta(days=5),
             progress=False
         )
 
