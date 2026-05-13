@@ -6,9 +6,15 @@ services:
     container_name: finance-api
     ports:
       - "8080:8080"
+    
+    # 1. Puxa TODAS as variáveis secretas/dinâmicas do seu arquivo .env automaticamente
+    env_file:
+      - .env
+      
+    # 2. Define apenas as variáveis fixas da máquina aqui
     environment:
       - AWS_DEFAULT_REGION=us-east-1
-      - S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an
       - TZ=America/Sao_Paulo
+      
     # Garante que a API volte a ligar sozinha caso a máquina reinicie ou dê crash
     restart: always
