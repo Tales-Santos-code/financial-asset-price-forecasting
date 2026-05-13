@@ -152,6 +152,13 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
 
     log_return_previsto_scaled = _model_predict(model, X_features, n_expected)
     
+    # Garantir que seja um float escalar para evitar erro no isnan
+    try:
+        log_return_previsto_scaled = float(log_return_previsto_scaled)
+    except (TypeError, ValueError):
+        logger.error(f"❌ Erro: O modelo retornou um tipo não conversível para float: {type(log_return_previsto_scaled)}")
+        raise ValueError(f"O modelo retornou um formato inválido para {symbol}.")
+
     if np.isnan(log_return_previsto_scaled):
         logger.error(f"❌ O modelo retornou NaN para {symbol}.")
         raise ValueError(f"Modelo falhou ao gerar um valor numérico para {symbol}.")
