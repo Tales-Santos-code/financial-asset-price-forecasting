@@ -134,8 +134,27 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
     if hasattr(model, "num_features"):
         n_expected = model.num_features
     
-    X_features = X_full.drop(columns=['Target_Log_Return']) if 'Target_Log_Return' in X_full.columns else X_full
+    X_features = (
+        X_full.drop(columns=["Target_Log_Return"])
+        if "Target_Log_Return" in X_full.columns
+        else X_full
+    )
+
+    if X_features.empty:
+        logger.error(f"❌ Erro: X_features está vazio após o pipeline para {symbol}. Verifique o Feature Engineering.")
+        raise ValueError(f"Dados insuficientes para gerar predição para {symbol}.")
+
+    logger.info(f"📊 X_features pronto para predição. Shape: {X_features.shape}")
+    
+    # Log das últimas features para debug
+    last_features = X_features.tail(1).to_dict(orient='records')[0]
+    logger.debug(f"🔍 Últimas features enviadas ao modelo: {last_features}")
+
     log_return_previsto_scaled = _model_predict(model, X_features, n_expected)
+    
+    if np.isnan(log_return_previsto_scaled):
+        logger.error(f"❌ O modelo retornou NaN para {symbol}.")
+        raise ValueError(f"Modelo falhou ao gerar um valor numérico para {symbol}.")
     
     # Inverte escala
     if scaler is not None:

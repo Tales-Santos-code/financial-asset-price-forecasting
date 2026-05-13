@@ -35,6 +35,7 @@ class FinanceService:
                     logger.info(
                         f"Nenhum dado novo encontrado para {self.ticker_symbol} na API."
                     )
+                    start_date = last_date_dt
                 else:
                     start_date = (last_date_dt + pd.Timedelta(days=1)).strftime(
                         "%Y-%m-%d"

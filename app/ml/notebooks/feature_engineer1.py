@@ -150,11 +150,21 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         cols_existentes = [c for c in cols_to_drop if c in df.columns]
         df = df.drop(columns=cols_existentes)
         
-        cols_features = [c for c in df.columns if c not in ['Target_Log_Return', 'Date']]
-        df = df.dropna(subset=cols_features)
+        cols_features = [
+            c for c in df.columns if c not in ["Target_Log_Return", "Date"]
+        ]
         
+        # Antes de dropar, vamos salvar a última linha caso precisemos dela para predição
+        df_last_row_backup = df.tail(1).copy()
+
+        df = df.dropna(subset=cols_features)
+
+        if df.empty and not self.is_training:
+            print("[Pipeline] AVISO: Todas as linhas foram removidas pelo dropna. Usando fallback da última linha para predição.")
+            df = df_last_row_backup.fillna(0.0)
+
         if self.is_training:
             df = df.dropna(subset=['Target_Log_Return'])
             
-        print("[Pipeline] Pipeline concluido! Matriz purificada pronta para ML.")
+        print(f"[Pipeline] Pipeline concluido! Matriz pronta. Shape: {df.shape}")
         return df
