@@ -26,7 +26,7 @@ class FinanceService:
         if use_checkpoint:
             # 1. Busca o ponteiro no S3
             pointer_data = read_json_from_s3(bucket, pointer_key)
-            
+            today_dt = pd.Timestamp.now().normalize()
             if pointer_data and "last_date" in pointer_data:
                 # Pega a última data e soma 1 dia (para não baixar o último dia duplicado)
                 last_date_dt = pd.to_datetime(pointer_data["last_date"])

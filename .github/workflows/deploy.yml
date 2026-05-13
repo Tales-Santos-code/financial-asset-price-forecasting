@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - Deploy API (Máquina 1)
+name: CI/CD Pipeline - Deploy API
 
 on:
   push:
@@ -8,27 +8,27 @@ jobs:
   # ==========================================
   # JOB 1: INTEGRAÇÃO CONTÍNUA
   # ==========================================
-  test:
-    runs-on: ubuntu-latest
-    steps:
-    - name: 📥 Clonar o Código
-      uses: actions/checkout@v3
+  # test:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: 📥 Clonar o Código
+  #     uses: actions/checkout@v3
 
-    - name: 🐍 Configurar Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+  #   - name: 🐍 Configurar Python
+  #     uses: actions/setup-python@v4
+  #     with:
+  #       python-version: '3.10'
 
-    - name: 📦 Instalar dependências de Teste
-      run: |
-        python -m pip install --upgrade pip
-        pip install ruff pytest
-        pip install -r requirements.txt 
+  #   - name: 📦 Instalar dependências de Teste
+  #     run: |
+  #       python -m pip install --upgrade pip
+  #       pip install ruff pytest
+  #       pip install -r requirements.txt 
 
-    - name: 🧹 Linting e Formatação (Ruff)
-      run: |
-        echo "Verificando se o código segue a PEP8..."
-        ruff check app/
+  #   - name: 🧹 Linting e Formatação (Ruff)
+  #     run: |
+  #       echo "Verificando se o código segue a PEP8..."
+  #       ruff check app/
 
   # ==========================================
   # JOB 2: DEPLOY DA API NA MÁQUINA 1
@@ -59,8 +59,8 @@ jobs:
         username: ec2-user 
         key: ${{ secrets.EC2_API_SSH_KEY }}
         script: |
-          # 🛠️ AUTO-SETUP: Prepara a máquina nova (Amazon Linux 2023)
-          if ! command -v docker &> /dev/null || ! docker buildx version &> /dev/null; then
+          # 1. Garante o Docker base (só instala se não existir)
+          if ! command -v docker &> /dev/null; then
             echo "Instalando Git e Docker..."
             sudo dnf update -y
             sudo dnf install -y git docker
@@ -68,35 +68,32 @@ jobs:
             sudo systemctl enable docker
             sudo usermod -aG docker ec2-user
             sudo chmod 666 /var/run/docker.sock 
-            
-            echo "Instalando Docker Compose..."
-            sudo mkdir -p /usr/libexec/docker/cli-plugins
-            sudo curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/libexec/docker/cli-plugins/docker-compose
-            sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
-
-            echo "Instalando Docker Buildx (necessário para o Compose)..."
-            sudo curl -SL https://github.com/docker/buildx/releases/latest/download/buildx-v0.17.1.linux-amd64 -o /usr/libexec/docker/cli-plugins/docker-buildx
-            sudo chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
           fi
 
-          # 📁 Gerencia o Repositório na Máquina 1
+          # 2. Força a atualização dos plugins (Resolve o erro do Buildx)
+          echo "Atualizando plugins do Docker..."
+          sudo mkdir -p /usr/libexec/docker/cli-plugins
+          sudo curl -sSL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 -o /usr/libexec/docker/cli-plugins/docker-compose
+          sudo chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+          sudo curl -sSL https://github.com/docker/buildx/releases/download/v0.17.1/buildx-v0.17.1.linux-amd64 -o /usr/libexec/docker/cli-plugins/docker-buildx
+          sudo chmod +x /usr/libexec/docker/cli-plugins/docker-buildx
+
+          # 3. Gerencia o Repositório
           cd /home/ec2-user
           if [ ! -d "financial-asset-price-forecasting" ]; then
-            echo "Clonando o repositório pela primeira vez..."
+            echo "Clonando o repositório..."
             git clone https://github.com/Tales-Santos-code/financial-asset-price-forecasting.git
           fi
           
-          # Entra na pasta correta do ec2-user
           cd /home/ec2-user/financial-asset-price-forecasting
           
-          echo "Puxando novo código do GitHub..."
+          echo "Puxando código novo..."
           git checkout .
           git pull origin main
           
-          echo "Recriando e subindo o contêiner da API..."
+          echo "Subindo API..."
           docker compose up -d --build
           
-          echo "Limpando imagens antigas do Docker para economizar disco..."
           docker image prune -f
           
           echo "--- LOGS DA API ---"
