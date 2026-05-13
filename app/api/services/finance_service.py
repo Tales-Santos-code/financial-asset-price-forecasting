@@ -26,7 +26,8 @@ class FinanceService:
         if use_checkpoint:
             # 1. Busca o ponteiro no S3
             pointer_data = read_json_from_s3(bucket, pointer_key)
-            today_dt = pd.Timestamp.now().normalize()#F841
+            # Isso garante que 'hoje' seja sempre a data de São Paulo, não importa onde a EC2 esteja
+            today_dt = pd.Timestamp.now(tz='America/Sao_Paulo').normalize().tz_localize(None) # noqa: F841
             if pointer_data and "last_date" in pointer_data:
                 # Pega a última data e soma 1 dia (para não baixar o último dia duplicado)
                 last_date_dt = pd.to_datetime(pointer_data["last_date"])
