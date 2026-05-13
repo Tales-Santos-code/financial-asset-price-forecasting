@@ -1,0 +1,41 @@
+{
+    "symbol": "ITSA4.SA",
+    "timestamp": "2026-05-13T01:45:35.587219",
+    "model_version": "champion",
+    "features_input": {
+        "SP500_Return": 0.5313468087249672,
+        "VIX_Return": 0.3477359238894592,
+        "EURUSD_Return": 0.47619372823830314,
+        "Sentiment_Score": 0.0,
+        "Log_Return": 0.3768385539653977,
+        "Target_Log_Return": 0.42012056211763676,
+        "Lag_1": 0.3718004122430849,
+        "Lag_2": 0.45870411820609047,
+        "Lag_3": 0.3700732586821504,
+        "Lag_5": 0.43150002166875384,
+        "Rolling_Std_14": 0.08734825387873077,
+        "Distancia_SMA_20": 0.4398139423816657,
+        "Distancia_SMA_50": 0.5215805007713441,
+        "Bollinger_Width": 0.21089439040332544,
+        "Volume_Shock": 0.0,
+        "Month_Sin": 0.75,
+        "Month_Cos": 0.06698729810778065,
+        "Day_Sin": 1.0,
+        "Day_Cos": 0.6180339887498949,
+        "Volume_ROC_5": 0.0,
+        "OBV_ROC_5": 0.9172431667565062,
+        "RSI_14": 0.23690062285506988,
+        "MACD_Line": 0.2803278516548968,
+        "MACD_Signal": 0.35976389459311736,
+        "MACD_Histogram": 0.23486982113132882,
+        "ATR_14": 2.609443350713188,
+        "ATR_Pct": 0.48499867973136224
+    },
+    "prediction_output": {
+        "symbol": "ITSA4.SA",
+        "current_price": 13.03,
+        "predicted_price_tomorrow": NaN,
+        "variation_pct": NaN,
+        "timestamp": "2026-05-12"
+    }
+}

@@ -83,25 +83,37 @@ def get_model_and_params(symbol: str):
             
     return _model_cache[f"{symbol}_pipeline"], _model_cache[f"{symbol}_model"], _model_cache[f"{symbol}_scaler"]
 
-def _model_predict(model, X_full: pd.DataFrame, n_expected_features: int) -> float:
-    n_input_cols = X_full.shape[1]
-    
-    if n_input_cols > 0: # Check to avoid division by zero
+def _model_predict(model, X: pd.DataFrame, n_expected_features: int) -> float:
+    n_input_cols = X.shape[1]
+
+    if n_input_cols > 0:
+        # Caso 1: Modelo PyTorch (Tensor)
         import torch
         if isinstance(model, torch.nn.Module):
             model.eval()
-            seq_len = n_expected_features // n_input_cols if n_expected_features > n_input_cols else 1
-            X_window = X_full.tail(seq_len).values.astype("float32")
+            seq_len = n_expected_features // n_input_cols
+            X_window = X.tail(seq_len).values.astype('float32')
             X_tensor = torch.tensor(X_window, dtype=torch.float32).unsqueeze(0)
             with torch.no_grad():
                 output = model(X_tensor)
             return float(output.squeeze().item())
-    else:
+        
+        # Caso 2: Modelos Tabulares (XGBoost, LGBM, etc)
         if n_expected_features > n_input_cols:
             seq_len = n_expected_features // n_input_cols
-            X_window = X_full.tail(seq_len).values.flatten().reshape(1, -1)
-            return float(model.predict(X_window)[0])
-        return float(model.predict(X_full.tail(1))[0])
+            # Garante que temos linhas suficientes
+            if len(X) < seq_len:
+                logger.warning(f"⚠️ Linhas insuficientes: {len(X)} < {seq_len}. Preenchendo...")
+                X_window = X.tail(seq_len).reindex(range(seq_len), fill_value=0.0).values.flatten()
+            else:
+                X_window = X.tail(seq_len).values.flatten()
+            
+            return float(model.predict(X_window.reshape(1, -1))[0])
+        
+        # Caso 3: Modelo simples (1 linha)
+        return float(model.predict(X.tail(1))[0])
+    
+    return np.nan
 
 def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFrame) -> dict:
     pipeline, model, scaler = get_model_and_params(symbol)
@@ -124,44 +136,32 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
     X_full = X_full.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
     # Aplica Scaler de forma eficiente
-    if scaler is not None and X_full.shape[1] == getattr(scaler, "n_features_in_", 0):
-        X_full.iloc[:, :] = scaler.transform(X_full.values)
+    applied_scaler = False
+    if scaler is not None:
+        n_features_scaler = getattr(scaler, "n_features_in_", 0)
+        if X_full.shape[1] == n_features_scaler:
+            X_full.iloc[:, :] = scaler.transform(X_full.values)
+            applied_scaler = True
+        else:
+            logger.warning(f"⚠️ Scaler ignorado para {symbol}: esperado {n_features_scaler}, recebido {X_full.shape[1]}")
 
     # Predição
+    X_features = (
+        X_full.drop(columns=["Target_Log_Return"])
+        if "Target_Log_Return" in X_full.columns
+        else X_full
+    )
+    
+    nans_count = X_features.isna().sum().sum()
+    logger.info(f"🔍 [Debug] {symbol} | Scaler: {applied_scaler} | NaNs em features: {nans_count}")
+    
     n_expected = getattr(model, "n_features_in_", X_full.shape[1])
     if hasattr(model, "num_feature"):
         n_expected = model.num_feature()
     if hasattr(model, "num_features"):
         n_expected = model.num_features
     
-    X_features = (
-        X_full.drop(columns=["Target_Log_Return"])
-        if "Target_Log_Return" in X_full.columns
-        else X_full
-    )
-
-    if X_features.empty:
-        logger.error(f"❌ Erro: X_features está vazio após o pipeline para {symbol}. Verifique o Feature Engineering.")
-        raise ValueError(f"Dados insuficientes para gerar predição para {symbol}.")
-
-    logger.info(f"📊 X_features pronto para predição. Shape: {X_features.shape}")
-    
-    # Log das últimas features para debug
-    last_features = X_features.tail(1).to_dict(orient='records')[0]
-    logger.debug(f"🔍 Últimas features enviadas ao modelo: {last_features}")
-
     log_return_previsto_scaled = _model_predict(model, X_features, n_expected)
-    
-    # Garantir que seja um float escalar para evitar erro no isnan
-    try:
-        log_return_previsto_scaled = float(log_return_previsto_scaled)
-    except (TypeError, ValueError):
-        logger.error(f"❌ Erro: O modelo retornou um tipo não conversível para float: {type(log_return_previsto_scaled)}")
-        raise ValueError(f"O modelo retornou um formato inválido para {symbol}.")
-
-    if np.isnan(log_return_previsto_scaled):
-        logger.error(f"❌ O modelo retornou NaN para {symbol}.")
-        raise ValueError(f"Modelo falhou ao gerar um valor numérico para {symbol}.")
     
     # Inverte escala
     if scaler is not None:
@@ -178,9 +178,10 @@ def pipe_to_predict(symbol: str, df_history: pd.DataFrame, df_macro: pd.DataFram
     resultado = {
         "symbol": symbol,
         "current_price": round(float(ultimo_preco), 2),
-        "predicted_price_tomorrow": round(float(preco_previsto), 2),
-        "variation_pct": round(float(variacao_pct), 4),
-        "timestamp": data_ref
+        "predicted_price_tomorrow": round(float(preco_previsto), 2) if not np.isnan(preco_previsto) else None,
+        "variation_pct": round(float(variacao_pct), 4) if not np.isnan(variacao_pct) else None,
+        "timestamp": data_ref,
+        "message": None
     }
     
     # Log de monitoramento (S3)

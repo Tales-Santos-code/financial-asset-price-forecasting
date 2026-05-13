@@ -1,0 +1,42 @@
+{
+    "symbol": "VALE3.SA",
+    "timestamp": "2026-05-13T01:47:14.045235",
+    "model_version": "champion",
+    "features_input": {
+        "SP500_Return": 0.5313468087249672,
+        "VIX_Return": 0.3477359238894592,
+        "EURUSD_Return": 0.47619372823830314,
+        "Sentiment_Score": 0.0,
+        "Log_Return": 0.5877686292544336,
+        "Target_Log_Return": 0.5928159721115159,
+        "Lag_1": 0.6606975617008269,
+        "Lag_2": 0.6119069243148298,
+        "Lag_3": 0.5625602659842447,
+        "Lag_5": 0.5855831474613451,
+        "Rolling_Std_14": 0.19595413417917482,
+        "Distancia_SMA_20": 0.3555757322418842,
+        "Distancia_SMA_50": 0.4083500591874157,
+        "Bollinger_Width": 0.22318293083773644,
+        "Volume_Shock": 0.0,
+        "Month_Sin": 0.75,
+        "Month_Cos": 0.06698729810778065,
+        "Day_Sin": 1.0,
+        "Day_Cos": 0.6180339887498949,
+        "Volume_ROC_5": 0.0,
+        "OBV_ROC_5": 0.9833484684135916,
+        "RSI_14": 0.547003169810908,
+        "MACD_Line": 0.3517389363041588,
+        "MACD_Signal": 0.37252435574087783,
+        "MACD_Histogram": 0.4931205183247895,
+        "ATR_14": 2.5531998586684876,
+        "ATR_Pct": 0.5466609726411468
+    },
+    "prediction_output": {
+        "symbol": "VALE3.SA",
+        "current_price": 83.25,
+        "predicted_price_tomorrow": null,
+        "variation_pct": null,
+        "timestamp": "2026-05-12",
+        "message": "Shape: (201, 26). Pre\u00e7o: 83.25. LogRetPrev: nan | ALERTA: Predi\u00e7\u00e3o resultou em NaN!"
+    }
+}

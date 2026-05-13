@@ -58,15 +58,27 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         # ==========================================
         # 3. CONTEXTO DE SENTIMENTO
         # ==========================================
-        print("[Pipeline] Injetando Sentimento das Noticias (FinBERT)...")
-        caminho_news = os.path.join(BASE_DIR, 'app', 'ml', 'pipeline', 'race_news.csv')
+        # Tenta carregar notícias específicas do ticker, se não existir usa 0.0
+        ticker_lower = "race" # Padrão
+        # Tenta inferir o ticker pelo tamanho do df ou contexto se possível, 
+        # mas como o pipeline é genérico, vamos tentar procurar arquivos que existam
         
-        if os.path.exists(caminho_news):
-            df_news = pd.read_csv(caminho_news)
-            df_news['Date'] = pd.to_datetime(df_news['Date']).dt.tz_localize(None)
-            df = pd.merge(df, df_news, on='Date', how='left')
-            df['Sentiment_Score'] = df['Sentiment_Score'].fillna(0.0)
-        else:
+        sentiment_found = False
+        # Buscamos por arquivos de notícias na pasta pipeline
+        pasta_news = os.path.join(BASE_DIR, "app", "ml", "pipeline")
+        if os.path.exists(pasta_news):
+            for file in os.listdir(pasta_news):
+                if file.endswith("_news.csv"):
+                    df_news = pd.read_csv(os.path.join(pasta_news, file))
+                    df_news['Date'] = pd.to_datetime(df_news['Date']).dt.tz_localize(None)
+                    # Verifica se as datas batem com o DF atual
+                    if not pd.merge(df, df_news, on='Date', how='inner').empty:
+                        df = pd.merge(df, df_news, on='Date', how='left')
+                        df['Sentiment_Score'] = df['Sentiment_Score'].fillna(0.0)
+                        sentiment_found = True
+                        break
+        
+        if not sentiment_found:
             df['Sentiment_Score'] = 0.0
 
         # ==========================================
@@ -150,21 +162,22 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         cols_existentes = [c for c in cols_to_drop if c in df.columns]
         df = df.drop(columns=cols_existentes)
         
-        cols_features = [
-            c for c in df.columns if c not in ["Target_Log_Return", "Date"]
-        ]
+        cols_features = [c for c in df.columns if c not in ['Target_Log_Return', 'Date']]
         
-        # Antes de dropar, vamos salvar a última linha caso precisemos dela para predição
-        df_last_row_backup = df.tail(1).copy()
+        # LOG DE DIAGNÓSTICO: Quais colunas têm NaNs?
+        nans_por_coluna = df[cols_features].isna().sum()
+        cols_com_nans = nans_por_coluna[nans_por_coluna > 0].to_dict()
+        if cols_com_nans:
+            print(f"[Pipeline] Colunas com NaNs detectadas: {cols_com_nans}")
 
-        df = df.dropna(subset=cols_features)
-
-        if df.empty and not self.is_training:
-            print("[Pipeline] AVISO: Todas as linhas foram removidas pelo dropna. Usando fallback da última linha para predição.")
-            df = df_last_row_backup.fillna(0.0)
-
-        if self.is_training:
+        if not self.is_training:
+            df_final = df.dropna(subset=cols_features)
+            if df_final.empty:
+                df = df.fillna(0)
+            else:
+                df = df_final
+        else:
+            df = df.dropna(subset=cols_features)
             df = df.dropna(subset=['Target_Log_Return'])
             
-        print(f"[Pipeline] Pipeline concluido! Matriz pronta. Shape: {df.shape}")
         return df

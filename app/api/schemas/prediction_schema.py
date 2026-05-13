@@ -31,8 +31,8 @@ class PredictionResponse(BaseModel):
     """
     symbol: str = Field(..., description="Ticker consultado")
     current_price: float = Field(..., description="Cotação de fechamento do dia da referência")
-    predicted_price_tomorrow: float = Field(..., description="Preço previsto para o próximo dia útil (XGBoost)")
-    variation_pct: float = Field(..., description="Variação percentual prevista em relação ao preço atual")
+    predicted_price_tomorrow: Optional[float] = Field(None, description="Preço previsto para o próximo dia útil (XGBoost)")
+    variation_pct: Optional[float] = Field(None, description="Variação percentual prevista em relação ao preço atual")
     timestamp: str = Field(..., description="Data da última cotação real utilizada como base")
     
     # Mensagem opcional de sistema
