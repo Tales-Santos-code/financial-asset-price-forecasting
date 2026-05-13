@@ -1,126 +1,129 @@
-# 📈 Financial Asset Price Forecasting - MLOps Pipeline
+# 📈 Financial Asset Price Forecasting: Self-Healing MLOps Pipeline
 
-Este projeto é uma solução completa de MLOps para previsão de fechamento de cotações da bolsa de valores. A arquitetura foi desenvolvida com foco em **Continuous Integration, Continuous Deployment (CI/CD) e Continuous Training (CT)**.
+Este projeto apresenta uma arquitetura avançada de MLOps orientada a eventos para previsão de ativos financeiros. Fugindo de implementações genéricas e monolíticas, o sistema adota um design *decoupled* (desacoplado), separando a camada de inferência de baixa latência do pipeline de treinamento intensivo. 
 
-O sistema é composto por uma API Serverless, monitoramento ativo de Data Drift e um pipeline automatizado de retreino na nuvem que testa múltiplas arquiteturas de Machine Learning e Deep Learning.
+O foco principal é a resiliência e a autonomia: a aplicação monitora ativamente a degradação dos dados (*Data Drift*) em produção e orquestra seu próprio ciclo de retreino (Continuous Training) acionando infraestrutura efêmera na nuvem. É um ecossistema projetado para se adaptar dinamicamente à volatilidade do mercado financeiro sem a necessidade de intervenção humana.
 
 ---
 
-## 🏗️ Arquitetura do Sistema
+## 🏗️ Arquitetura e Fluxo de Dados (Data Flow)
 
-Abaixo está o diagrama do fluxo da aplicação. Ele ilustra desde a requisição do usuário na ponta da API até a automação de retreino disparada pela detecção de anomalias nos dados.
+A topologia do sistema foi desenhada para garantir alta disponibilidade (HA) na ponta do usuário e otimização de custos no backend. O diagrama abaixo detalha o isolamento dos workloads e o ciclo de vida dos dados:
 
 ```mermaid
 graph TD
-    User((Usuário)) -->|Requisição HTTP| API[AWS Lambda FastAPI + Mangum]
+    User((Usuário)) -->|HTTP GET /predict| API
+    Dev((Desenvolvedor)) -->|Git Push| GH_Deploy[GitHub Actions: Deploy]
     
-    subgraph "Inference & Monitoring (AWS Lambda)"
-        API -->|Salva Payload| S3_Logs[(S3: Logs JSON)]
-        API -->|Consulta| S3_Model[(S3: Modelos Salvos)]
-        API -->|Analisa em Memória| Evidently[Evidently AI 0.7+]
-        Evidently -->|Snapshot In-Memory| S3_Reports[(S3: HTML Reports)]
+    %% MÁQUINA 1: Sempre ligada
+    subgraph "Máquina 1 (EC2): API de Inferência (24/7)"
+        API[📦 Docker: FastAPI + Uvicorn] 
+        Evidently[📊 Lib Interna: Evidently AI]
+        API -->|Valida Dados em Memória| Evidently
+    end
+    
+    GH_Deploy -->|Update via SSH| API
+
+    %% AWS S3: O coração dos dados
+    subgraph "Data Lake & Model Registry (AWS S3)"
+        S3_Model[(🧠 Modelos Campeões)]
+        S3_Reports[(📈 Relatórios de Drift)]
+        S3_Data[(📁 Checkpoints & Base Histórica)]
     end
 
-    subgraph "Continuous Training (CT)"
-        Evidently -->|Alerta de Drift| GH_Actions_Retrain[GitHub Actions: Retreino]
-        GH_Actions_Retrain -->|Liga Instância| EC2[AWS EC2 t3a.medium]
-        EC2 -->|Baixa Dados Históricos| S3_Data[(S3: Processed Data)]
-        EC2 -->|Feature Engineering| Pipeline[Pandas Pipeline]
-        Pipeline -->|Treina 5 Algoritmos| ML_Models[LSTM, GRU, XGBoost, LightGBM, Random Forest]
-        ML_Models -->|Registra e Elege Campeão| MLflow[Docker: MLflow Server]
-        MLflow -->|Salva Novo Campeão| S3_Model
-        GH_Actions_Retrain -->|Desliga Instância| EC2
-    end
+    API -->|Carrega Artefatos| S3_Model
+    Evidently -->|Gera HTML Reports| S3_Reports
 
-    subgraph "CI/CD Pipeline"
-        Dev((Desenvolvedor)) -->|Git Push| GH_Actions_Deploy[GitHub Actions: Deploy]
-        GH_Actions_Deploy -->|Gera Imagem| Docker[Docker Build]
-        Docker -->|Push Imagem| ECR[AWS ECR]
-        ECR -->|Atualiza Função| API
+    %% A PONTE: O Gatilho de Drift
+    Evidently -->|Webhook REST via Token| GH_CT[🛠️ GitHub Actions: CT Pipeline]
+
+    %% MÁQUINA 2: Infraestrutura Efêmera
+    subgraph "Máquina 2 (EC2): Worker de Retreino Sob Demanda"
+        GH_CT -->|1. AWS CLI: Start Instance| EC2_ML[Servidor EC2 Ativado]
+        EC2_ML -->|2. Executa Pipeline ML| Pipeline[Treino Distribuído Sklearn/PyTorch]
+        Pipeline -->|3. Atualiza Base| S3_Data
+        Pipeline -->|4. Rastreia Métricas| MLflow[📦 Docker: MLflow Tracking Server]
+        MLflow -->|5. Promove Novo Campeão| S3_Model
+        
+        %% Ciclo de Desligamento
+        Pipeline -->|6. Emite Sinal de Sucesso| GH_CT_Off[🛠️ GitHub Actions: Teardown]
+        GH_CT_Off -->|7. AWS CLI: Stop Instance| EC2_ML
     end
 ```
 
 ---
 
-## 🛠️ Tecnologias e Ferramentas
+## 🛡️ Segurança e FinOps (Cloud Economics)
 
-* **API & Backend:** FastAPI, Mangum, Pydantic, Python 3.12.
-* **Machine Learning:** Scikit-learn, XGBoost, LightGBM, PyTorch (Redes Neurais LSTM e GRU).
-* **MLOps & Tracking:** MLflow (Servidor Dockerizado), Evidently AI 0.7+ (Snapshot Architecture).
-* **Cloud & Infraestrutura:** AWS Lambda, AWS S3, AWS ECR, AWS EC2, Boto3.
-* **Automação:** GitHub Actions (CI/CD/CT), SSH Actions.
-* **Processamento e Dados:** Pandas, Numpy, Joblib, yfinance.
-* **NLP & Dados Alternativos:** Finnhub API (Notícias) e HuggingFace / FinBERT (Análise de Sentimento).
-* **Otimização Serverless:** In-memory HTML generation, Lazy Imports para redução de Cold Start, e caching de clientes AWS.
+Sistemas em nuvem exigem governança rigorosa sobre custos e credenciais. Este projeto implementa as seguintes diretrizes:
+
+* **Isolamento de Workload:** Para evitar que o consumo agressivo de RAM/CPU durante o treinamento derrube a API, a arquitetura utiliza instâncias EC2 distintas. 
+* **Computação Efêmera (FinOps):** A "Máquina 2", responsável pelo pipeline pesado, permanece estritamente **desligada**. Ela é provisionada dinamicamente pelo GitHub Actions apenas mediante o gatilho de degradação estatística (Drift) e encerrada assim que o novo modelo é salvo no S3.
+* **Zero Hardcoding & Secret Injection:** Nenhuma chave da AWS, Finnhub ou GitHub é versionada no repositório. O processo de CI/CD injeta credenciais via GitHub Secrets em um arquivo `.env` seguro na EC2, alimentando o Docker Compose via mapeamento de ambiente sem expor dados no shell.
 
 ---
 
-## 🧠 Pipeline de Feature Engineering
+## 🛠️ Stack Tecnológico
 
-Para capturar o comportamento dinâmico do mercado, o pipeline de dados (`app/ml/pipeline/`) não utiliza apenas o preço da ação. Ele aplica transformações e enriquece a base com dados alternativos antes do treinamento:
+A stack foi selecionada visando performance de inferência e capacidade de experimentação:
 
-1. **Contexto Macro (Global):** Ingestão do índice S&P 500, índice de volatilidade (VIX) e taxa de câmbio (EUR/USD).
-2. **Contexto de Sentimento (NLP):** Consumo de notícias financeiras via *Finnhub* e extração de polaridade e sentimento utilizando o modelo LLM **FinBERT** hospedado na *HuggingFace*.
-3. **Indicadores Técnicos Dinâmicos:** Cálculo de Médias Móveis (SMA 20 e 50), Distância do Preço para as SMAs e Bandas de Bollinger.
-4. **Osciladores e Força:** Relative Strength Index (RSI 14), MACD (Linha, Sinal e Histograma), Average True Range (ATR) e Volume Shocks.
-5. **Codificação Temporal:** Extração do ciclo sazonal utilizando transformações Seno/Cosseno para dias da semana e meses.
-6. **Alinhamento Preditivo:** Criação de *Lags* temporais e estruturação de janelas de tempo para o consumo das Redes Neurais (LSTM/GRU).
-
----
+* **Serving & Inference:** FastAPI, Pydantic, Python 3.12, Docker.
+* **Machine Learning & Deep Learning:** Scikit-learn, XGBoost, LightGBM, PyTorch (Arquiteturas sequenciais LSTM e GRU).
+* **MLOps & Observability:** MLflow (Tracking & Registry dockerizado), Evidently AI 0.7+ (Detecção de Drift com snapshots in-memory).
+* **Cloud Infrastructure:** AWS EC2, AWS S3, Boto3 SDK.
+* **Automação & Orquestração:** GitHub Actions (CI/CD para deploy seguro, CT para automação de infraestrutura via AWS CLI).
+* **Engenharia de Dados:** Pandas, Numpy, yfinance (com controle estrito de fuso horário `America/Sao_Paulo` para evitar UTC hangovers no fechamento de mercado).
 
 ---
 
-## 📡 Endpoints da API
+## 🧠 Pipeline de Engenharia de Atributos (Feature Engineering)
 
-A API está exposta via AWS Lambda e documentada pelo Swagger nativo do FastAPI (`/prod/docs`).
+A precisão em séries temporais financeiras depende da qualidade do contexto fornecido ao estimador. O script `app/ml/notebooks/feature_engineer1.py` constrói um pipeline multivariável e idempotente:
 
-### 1. Predição de Fechamento
-Retorna a inferência do modelo para o ativo solicitado no próximo dia útil.
+1. **Indicadores Macroeconômicos:** Ingestão de features de mercado global como S&P 500, Volatility Index (VIX) e paridade EUR/USD para contextualizar o risco sistêmico.
+2. **Inferência de NLP (Sentimento):** Integração com a API Finnhub para coleta de notícias e classificação de polaridade em lote (Batch Inference) através do modelo fundacional **FinBERT** (HuggingFace).
+3. **Análise Técnica Dinâmica:** Geração vetorial de features baseadas em momentum e volatilidade: SMA (20/50), Bandas de Bollinger, RSI (14), MACD e Average True Range (ATR).
+4. **Encodificação Temporal Cíclica:** Transformações matemáticas de Seno/Cosseno sobre o calendário para modelar dependências sazonais sem criar viés de grandeza linear (ex: dia da semana, mês).
+5. **Robustez de Pipeline:** Estratégias de *imputation* (preenchimento de NaNs), cálculos de deltas diários (Returns) e estruturação em janelas temporais de atraso (*lookback windows*) preparadas para ingestão em tensores do PyTorch.
+
+---
+
+## 📡 Endpoints da API REST
+
+A comunicação com o sistema é exposta através de uma interface RESTful documentada nativamente (Swagger/OpenAPI disponível em `/docs`).
+
+### 1. Inferência Preditiva
+Gera a predição de fechamento (*Close Price*) para o próximo dia útil do ticker especificado.
 * **URL:** `/prod/stock-data-prediction`
 * **Método:** `GET`
-* **Parâmetros:** `symbol` (String, obrigatório)
-* **Exemplo:** 
-  ```bash
-  curl "http://127.0.0.1:8000/prod/stock-data-prediction?symbol=NVDA"
-  ```
+* **Parâmetros:** `symbol` (ex: NVDA, AAPL, WEGE3.SA)
+* **Exemplo de uso:** 
+```bash 
+curl "http://localhost:8080/prod/stock-data-prediction?symbol=NVDA"
+```
 
-### 2. Monitoramento de Saúde
-Verifica o status operacional da API e do modelo carregado em memória.
-* **URL:** `/prod/monitoring/health`
-* **Método:** `GET`
-* **Exemplo:** 
-  ```bash
-  curl "http://127.0.0.1:8000/prod/monitoring/health"
-  ```
-
-### 3. Gatilho de Data Drift
-Aciona a análise comparativa entre dados de treino e logs de produção. Se o drift ultrapassar o threshold, dispara o workflow de retreino.
+### 2. Monitoramento de Data Drift
+Força a computação de métricas de distribuição entre a base de treino e o histórico recente. Caso o *drift score* ultrapasse o threshold definido, a API emite o Webhook para orquestrar o retreino via GitHub Actions.
 * **URL:** `/prod/monitoring/trigger-drift-check`
 * **Método:** `POST`
-* **Parâmetros:** 
-  - `symbol` (String, opcional): Ticker específico (ex: RACE). Se omitido, analisa todos.
-  - `run_async` (Boolean, opcional): Default `false`. Em Lambda, use `false` para garantir a conclusão da escrita no S3.
-* **Exemplo:** 
-  ```bash
-  curl -X POST "http://127.0.0.1:8000/prod/monitoring/trigger-drift-check?symbol=AAPL&run_async=false"
-  ```
+* **Query Params:** `symbol` (String, Opcional), `run_async` (Boolean, Default: false).
 
-### 4. Relatório Visual de Drift (Dashboard)
-Retorna o Dashboard HTML interativo do Evidently AI.
+### 3. Observabilidade e Relatórios
+Retorna um dump em HTML contendo a renderização analítica do Evidently AI com os gráficos de degradação do modelo.
 * **URL:** `/prod/monitoring/drift-report/{symbol}`
 * **Método:** `GET`
-* **Auto-Geração:** Se o relatório não existir no S3, o sistema inicia a geração em background.
-* **Exemplo:** 
-  ```bash
-  curl "http://127.0.0.1:8000/prod/monitoring/drift-report/NVDA"
-  ```
+
+### 4. Health Check
+Endpoint de prontidão e vivacidade (*Readiness/Liveness probe*) para monitorar a integridade do Uvicorn e o status do cache de modelos em memória.
+* **URL:** `/prod/monitoring/health`
+* **Método:** `GET`
 
 ---
 
-## 🚀 Como Configurar e Executar Localmente
+## 🚀 Como Configurar e Executar (Local & Homologação)
 
-### 1. Variáveis de Ambiente
-Crie um arquivo `.env` na raiz do projeto contendo as seguintes credenciais obrigatórias:
+### 1. Provisionamento de Segredos (.env)
+Crie o arquivo de ambiente na raiz do repositório para injetar as credenciais nas bibliotecas clientes:
 
 ```env
 FINNHUB_API_KEY=sua_chave_finnhub
@@ -128,65 +131,59 @@ HUGGINGFACE_API_KEY=sua_chave_huggingface
 AWS_ACCESS_KEY_ID=sua_chave_aws
 AWS_SECRET_ACCESS_KEY=sua_secret_aws
 AWS_REGION=us-east-1
-GITHUB_TOKEN=seu_pat_github
-GITHUB_OWNER=usuario_github
-GITHUB_REPO=repositorio_github
+S3_BUCKET_NAME=nome_do_seu_bucket
+GITHUB_TOKEN=seu_pat_github_para_retreino
+GITHUB_REPOSITORY=seu_usuario/seu_repositorio
 ```
 
-### 2. Instalação
-Crie seu ambiente virtual, ative-o e instale as dependências:
+### 2. Deploy Local (Containerizado)
+Recomendado para simular o ambiente de produção isolando as dependências do sistema host.
+
+```bash
+docker compose up --build -d
+```
+
+### 3. Setup de Desenvolvimento (Virtual Environment)
+Recomendado para debugar o pipeline do Scikit-learn/Pandas ou desenvolver novos endpoints:
 
 ```bash
 python -m venv venv
 source venv/bin/activate  # No Windows: venv\Scripts\activate
 pip install -r requirements.txt
 pip install -r app/ml/requirements-ml.txt
-```
 
-### 3. Subindo a API
-Para rodar o servidor FastAPI localmente para testes:
-```bash
-uvicorn app.api.main:app --reload
-```
-
-### 4. Executando Testes
-Para rodar a suíte de testes automatizados:
-```bash
-pytest tests/
+# Iniciar o servidor ASGI com hot-reload habilitado
+uvicorn app.api.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
 ---
 
-## 📂 Estrutura de Diretórios
+## 📂 Estrutura Estratégica de Diretórios
 
-O repositório está organizado utilizando os princípios do Domain-Driven Design (DDD) e Clean Architecture, separando a regra de negócio da API da esteira de Machine Learning:
+A taxonomia do projeto reflete a separação clara de responsabilidades (Domain-Driven):
 
 ```text
 📦 Raiz do Projeto
-├── .env
-├── .github/workflows/              # Esteiras de CI/CD (Deploy e Retreino EC2)
-│   ├── deploy.yml
-│   └── retreino_workflow.yml
+├── .env                            # Environment variables (Ignorado pelo Git)
+├── .github/workflows/              # Core da automação: CI/CD (deploy.yml) e CT (retrain.yml)
 ├── app/
-│   ├── api/                        # API FastAPI (Inference & Monitoring)
-│   │   ├── core/                   # AWS Clients, Logging e Configurações
-│   │   ├── routers/                # Roteadores: prediction, monitoring, stock_data
-│   │   ├── services/               # Lógica: drift_detector, prediction, s3, news_service
-│   │   ├── schemas/                # Schemas Pydantic para Request/Response
-│   │   ├── data/                   # Logs de predições locais
-│   │   ├── models/                 # Cache local de modelos (PKL)
-│   │   └── main.py                 # Entry point (Mangum / Lambda)
+│   ├── api/                        # Submódulo: Aplicação FastAPI
+│   │   ├── core/                   # Integrações de base (AWS Boto3, Logger Customizado)
+│   │   ├── routers/                # Declaração dos endpoints (Predict, Monitor)
+│   │   ├── schemas/                # Contratos de dados e validação estrita (Pydantic)
+│   │   ├── services/               # Lógica de domínio (S3 I/O, Drift Detection, YFinance API)
+│   │   ├── models/                 # Diretório de cache dinâmico para artefatos (.pkl)
+│   │   └── main.py                 # Ponto de inicialização do servidor Uvicorn
 │   │
-│   └── ml/                         # MLOps: Pipeline de Treinamento
-│       ├── training/               # Scripts: random_search, train, train_worker
-│       ├── features/               # Pipeline de Feature Engineering
-│       ├── server/                 # Infra: MLflow Docker Compose
-│       ├── utils/                  # Utilitários S3 para treinamento
-│       └── local_artifacts/        # Snapshots e artefatos de treino
-├── notebooks/                      # Análise Exploratória (EDA) e Pesquisa
-├── tests/                          # Suíte de Testes (API, ML, Services)
-├── docker-compose.yaml             # Setup local do MLflow
-├── Dockerfile                      # Definição da imagem para AWS Lambda
-├── requirements.txt                # Dependências da API
-└── README.md
+│   └── ml/                         # Submódulo: MLOps & Experimentação
+│       ├── features/               # Utilitários de preprocessamento bruto
+│       ├── notebooks/              # Pipelines consolidados de Feature Engineering
+│       ├── server/                 # Manifesto do MLflow Server (Docker Compose p/ Máquina 2)
+│       ├── training/               # Rotinas de Otimização de Hiperparâmetros e Treinamento
+│       └── utils/                  # Manipuladores de persistência S3 orientados a modelos
+├── notebooks/                      # Sandbox para Análise Exploratória (EDA) e Prototipagem
+├── tests/                          # Cobertura de testes unitários e de integração (Pytest)
+├── Dockerfile                      # Declaração de imagem leve e otimizada baseada em Python
+├── docker-compose.yaml             # Orquestrador local/produção da API
+└── requirements.txt                # Gestão de dependências
 ```
