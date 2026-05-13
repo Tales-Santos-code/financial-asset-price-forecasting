@@ -59,7 +59,6 @@ class FeatureEngineering(BaseEstimator, TransformerMixin):
         # 3. CONTEXTO DE SENTIMENTO
         # ==========================================
         # Tenta carregar notícias específicas do ticker, se não existir usa 0.0
-        ticker_lower = "race" # Padrão
         # Tenta inferir o ticker pelo tamanho do df ou contexto se possível, 
         # mas como o pipeline é genérico, vamos tentar procurar arquivos que existam
         
