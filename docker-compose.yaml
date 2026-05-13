@@ -9,5 +9,6 @@ services:
     environment:
       - AWS_DEFAULT_REGION=us-east-1
       - S3_BUCKET_NAME=financial-asset-price-forecasting-495599733085-us-east-1-an
+      - TZ=America/Sao_Paulo
     # Garante que a API volte a ligar sozinha caso a máquina reinicie ou dê crash
     restart: always

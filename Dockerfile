@@ -4,11 +4,13 @@ FROM python:3.12-slim
 # Define o diretório de trabalho padrão dentro do contêiner
 WORKDIR /app
 
-# Instala a biblioteca do sistema operacional exigida pelo XGBoost
-# (No Debian/Ubuntu, o 'libgomp' se chama 'libgomp1' e usamos apt-get em vez de dnf)
+# Instala dependências do sistema e configura timezone
 RUN apt-get update && \
-    apt-get install -y libgomp1 && \
+    apt-get install -y libgomp1 tzdata && \
     rm -rf /var/lib/apt/lists/*
+
+ENV TZ=America/Sao_Paulo
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 # Copia os requisitos e instala as dependências
 COPY requirements.txt .

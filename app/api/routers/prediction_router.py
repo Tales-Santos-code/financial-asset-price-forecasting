@@ -45,7 +45,7 @@ def predict_stock(
             f_novos = executor.submit(finance_api.get_historical_data, full=True, use_checkpoint=True)
             f_antigo = executor.submit(read_csv_from_s3, bucket, historico_key)
             
-            now = pd.Timestamp.now()
+            now = pd.Timestamp.now(tz="America/Sao_Paulo").tz_localize(None)
             f_macro = executor.submit(finance_api.get_macro_data, 
                                      min_date=(now - pd.Timedelta(days=200)).strftime('%Y-%m-%d'),
                                      max_date=now.strftime('%Y-%m-%d'))
